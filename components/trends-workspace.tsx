@@ -10,6 +10,10 @@ import {
   RiPulseLine,
 } from "@remixicon/react"
 
+import {
+  AiInsightPanel,
+  aiInsightTriggerClass,
+} from "@/components/ai-insight-panel"
 import { DataSourceBanner } from "@/components/data-source-banner"
 import { ProductThumbnail } from "@/components/product-thumbnail"
 import { useAppData, type TrendSourceKind } from "@/components/app-data-context"
@@ -19,7 +23,16 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useAiInsight } from "@/hooks/use-ai-insight"
 import { useVariantsWithOdoo } from "@/hooks/use-variants-with-odoo"
-import { blendPrediction, computeSeries } from "@/lib/trend-series"
+import { blendPrediction } from "@/lib/trend-series"
+import { cn } from "@/lib/utils"
+
+/** Fixed 6-month indices for client demos (Jan → Jun). Not tied to live inventory. */
+const DEMO_MARKET_TREND = [56, 61, 59, 67, 71, 78] as const
+const DEMO_SYSTEM_TREND = [52, 58, 64, 63, 70, 75] as const
+
+const marketSeries = [...DEMO_MARKET_TREND]
+const systemSeries = [...DEMO_SYSTEM_TREND]
+const predictionBlendStatic = blendPrediction(marketSeries, systemSeries)
 
 const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"] as const
 const inbound = [120, 132, 128, 145, 151, 158] as const
@@ -95,19 +108,6 @@ export function TrendsWorkspace() {
 
   const insight = useAiInsight()
 
-  const marketSeries = React.useMemo(
-    () => computeSeries(mergedVariants, trendSources, "market"),
-    [mergedVariants, trendSources]
-  )
-  const systemSeries = React.useMemo(
-    () => computeSeries(mergedVariants, trendSources, "system"),
-    [mergedVariants, trendSources]
-  )
-  const predictionBlend = React.useMemo(
-    () => blendPrediction(marketSeries, systemSeries),
-    [marketSeries, systemSeries]
-  )
-
   const onAiTrends = () => {
     const low = mergedVariants.filter((v) => v.weeksCover < 1.5).length
     void insight.run("trends", {
@@ -143,12 +143,12 @@ export function TrendsWorkspace() {
 
   return (
     <div className="flex flex-1 flex-col gap-5 px-4 py-5 pb-10 md:gap-6 md:px-6 md:py-6">
-      <DataSourceBanner
+      {/* <DataSourceBanner
         source={dataSource}
         loading={odooLoading}
         error={odooError}
         onRefresh={refetchOdoo}
-      />
+      /> */}
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <PageHeader
@@ -160,7 +160,7 @@ export function TrendsWorkspace() {
           <Button
             type="button"
             variant="outline"
-            className="gap-2"
+            className={cn("gap-2", aiInsightTriggerClass)}
             disabled={insight.loading}
             onClick={onAiTrends}
           >
@@ -183,30 +183,32 @@ export function TrendsWorkspace() {
       </div>
 
       {(insight.data?.summary || insight.data?.error) && (
-        <SurfaceCard className="border-primary/15 p-4 ring-1 ring-primary/10">
-          <h3 className="text-sm font-semibold">OpenRouter insight</h3>
+        <AiInsightPanel
+          title="Trend brief"
+          subtitle="LLM summary of your current catalog & signal context · verify before acting"
+        >
           {insight.data.error ? (
-            <p className="mt-2 text-sm text-destructive">{insight.data.error}</p>
+            <p className="text-sm text-destructive">{insight.data.error}</p>
           ) : (
             <>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              <p className="text-sm leading-relaxed text-foreground/90">
                 {insight.data.summary}
               </p>
               {insight.data.bullets && insight.data.bullets.length > 0 && (
-                <ul className="mt-3 list-inside list-disc text-sm text-foreground">
+                <ul className="mt-3 list-inside list-disc space-y-1 text-sm text-foreground">
                   {insight.data.bullets.map((b, i) => (
                     <li key={i}>{b}</li>
                   ))}
                 </ul>
               )}
               {insight.data.parseWarning && (
-                <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">
                   {insight.data.parseWarning}
                 </p>
               )}
             </>
           )}
-        </SurfaceCard>
+        </AiInsightPanel>
       )}
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -218,7 +220,7 @@ export function TrendsWorkspace() {
             </h2>
           </div>
           <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
-            External / demand-style index (weighted by variant trend scores).
+            Fixed demo demand-style index (6 months) for consistent walkthroughs.
           </p>
           <SeriesBars
             label="Index (6 mo)"
@@ -234,7 +236,8 @@ export function TrendsWorkspace() {
             </h2>
           </div>
           <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
-            From Odoo moves + enabled internal sources (simulated series).
+            Fixed demo internal / ops pulse (6 months). Trend-source toggles do
+            not change these bars.
           </p>
           <SeriesBars
             label="Index (6 mo)"
@@ -249,18 +252,17 @@ export function TrendsWorkspace() {
           </p>
           <SeriesBars
             label="Composite"
-            values={predictionBlend}
+            values={predictionBlendStatic}
             colorVar="var(--primary)"
           />
           <div className="mt-4 rounded-lg border border-border/60 bg-muted/30 p-3 text-xs leading-relaxed text-muted-foreground">
             {predictionSummary}
           </div>
-          {dataSource === "odoo" && (
-            <p className="mt-2 text-[10px] text-muted-foreground">
-              Charts use your Odoo variant mix; the text summary reflects the
-              last forecast run (saved workspace state).
-            </p>
-          )}
+          <p className="mt-2 text-[10px] text-muted-foreground">
+            Market &amp; system bars above are hardcoded demos; composite follows
+            the 45% / 55% blend. Summary text still updates when you run
+            forecast.
+          </p>
           {lastForecastAt && (
             <p className="mt-2 text-[10px] text-muted-foreground">
               Last run: {new Date(lastForecastAt).toLocaleString()}

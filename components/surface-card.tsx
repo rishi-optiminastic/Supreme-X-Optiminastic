@@ -15,7 +15,7 @@ export function SurfaceCard({
   return (
     <div
       className={cn(
-        "rounded-xl border border-border/60 bg-card text-card-foreground",
+        "rounded-xl border border-border/60 py-4 bg-card text-card-foreground",
         "shadow-sm shadow-black/5 ring-1 ring-black/5 dark:bg-card/95 dark:shadow-black/20 dark:ring-white/5",
         elevated &&
           "shadow-md shadow-black/8 ring-black/5 dark:shadow-black/30 dark:ring-white/8",

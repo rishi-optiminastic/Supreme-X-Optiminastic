@@ -69,12 +69,12 @@ export function InventoryDashboard() {
 
   return (
     <div className="flex flex-1 flex-col gap-5 px-4 py-5 pb-10 md:gap-6 md:px-6 md:py-6">
-      <DataSourceBanner
+      {/* <DataSourceBanner
         source={source}
         loading={odooLoading}
         error={odooError}
         onRefresh={refetchOdoo}
-      />
+      /> */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <PageHeader
           title="Inventory & stock"

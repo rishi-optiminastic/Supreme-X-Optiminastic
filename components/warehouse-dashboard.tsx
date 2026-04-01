@@ -386,12 +386,12 @@ export function WarehouseDashboard() {
         </div>
       </section>
 
-      <DataSourceBanner
+      {/* <DataSourceBanner
         source={dataSource}
         loading={odooLoading}
         error={odooError}
         onRefresh={refetchOdoo}
-      />
+      /> */}
 
       {isLiveCatalog && (
         <SurfaceCard

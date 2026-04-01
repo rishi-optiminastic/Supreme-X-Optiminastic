@@ -11,6 +11,10 @@ import {
   RiShoppingBag3Line,
 } from "@remixicon/react"
 
+import {
+  AiInsightPanel,
+  aiInsightTriggerClass,
+} from "@/components/ai-insight-panel"
 import { useAppData } from "@/components/app-data-context"
 import { DataSourceBanner } from "@/components/data-source-banner"
 import { PageHeader } from "@/components/page-header"
@@ -19,6 +23,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useAiInsight } from "@/hooks/use-ai-insight"
 import { useVariantsWithOdoo } from "@/hooks/use-variants-with-odoo"
+import { cn } from "@/lib/utils"
 
 function hashProduct(name: string) {
   let h = 0
@@ -160,19 +165,19 @@ export function SignalsDashboard() {
         description="Market read per product, purchase signal queue, and one-click push into the trend activity feed. State persists in your browser."
       />
 
-      <DataSourceBanner
+      {/* <DataSourceBanner
         source={source}
         loading={odooLoading}
         error={odooError}
         onRefresh={refetchOdoo}
-      />
+      /> */}
 
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="gap-2"
+          className={cn("gap-2", aiInsightTriggerClass)}
           disabled={insight.loading}
           onClick={onAiSignals}
         >
@@ -186,37 +191,40 @@ export function SignalsDashboard() {
       </div>
 
       {(insight.data?.summary || insight.data?.error) && (
-        <SurfaceCard className="border-primary/15 p-4 ring-1 ring-primary/10">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <h3 className="text-sm font-semibold">OpenRouter insight</h3>
-            {insight.data.purchaseHints && insight.data.purchaseHints.length > 0 && (
+        <AiInsightPanel
+          title="Signal assistant"
+          subtitle="Purchase-focused suggestions from your inventory snapshot · not ERP truth"
+          actions={
+            insight.data.purchaseHints &&
+            insight.data.purchaseHints.length > 0 ? (
               <Button type="button" size="sm" variant="secondary" onClick={onApplyHints}>
                 Apply hints to queue
               </Button>
-            )}
-          </div>
+            ) : undefined
+          }
+        >
           {insight.data.error ? (
-            <p className="mt-2 text-sm text-destructive">{insight.data.error}</p>
+            <p className="text-sm text-destructive">{insight.data.error}</p>
           ) : (
             <>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              <p className="text-sm leading-relaxed text-foreground/90">
                 {insight.data.summary}
               </p>
               {insight.data.bullets && insight.data.bullets.length > 0 && (
-                <ul className="mt-3 list-inside list-disc text-sm text-foreground">
+                <ul className="mt-3 list-inside list-disc space-y-1 text-sm text-foreground">
                   {insight.data.bullets.map((b, i) => (
                     <li key={i}>{b}</li>
                   ))}
                 </ul>
               )}
               {insight.data.parseWarning && (
-                <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">
                   {insight.data.parseWarning}
                 </p>
               )}
             </>
           )}
-        </SurfaceCard>
+        </AiInsightPanel>
       )}
 
       <div className="grid gap-4 md:grid-cols-3">

@@ -2,8 +2,20 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+} from "recharts"
 
+import {
+  AiInsightPanel,
+  aiInsightTriggerClass,
+} from "@/components/ai-insight-panel"
 import { useAppData } from "@/components/app-data-context"
 import { DataSourceBanner } from "@/components/data-source-banner"
 import { PageHeader } from "@/components/page-header"
@@ -95,6 +107,13 @@ const fulfillmentChartConfig = {
   },
 } satisfies ChartConfig
 
+const weeklyOrdersChartConfig = {
+  units: {
+    label: "Units",
+    color: "var(--primary)",
+  },
+} satisfies ChartConfig
+
 const categoryMix = [
   { name: "Electronics", pct: 38, color: "var(--chart-1)" },
   { name: "Apparel", pct: 27, color: "var(--chart-2)" },
@@ -155,42 +174,49 @@ const recent = [
 ] as const
 
 function BarChartBlock() {
-  const max = Math.max(...weeklyOrders.map((d) => d.value), 1)
+  const data = weeklyOrders.map(({ label, value }) => ({
+    day: label,
+    units: value,
+  }))
 
   return (
-    <div className="rounded-xl border border-border/50 bg-linear-to-b from-muted/50 to-muted/25 p-4 shadow-inner ring-1 ring-black/[0.03] ring-inset dark:from-muted/30 dark:to-muted/15 dark:ring-white/[0.04]">
-      <div className="flex h-[220px] items-end justify-between gap-1.5 sm:gap-3">
-        {weeklyOrders.map(({ label, value }) => {
-          const pct = (value / max) * 100
-          return (
-            <div
-              key={label}
-              className="group/bar flex min-w-0 flex-1 flex-col items-center gap-2"
-            >
-              <span className="text-[11px] font-bold text-primary tabular-nums opacity-90 sm:text-xs">
-                {value}
-              </span>
-              <div className="relative flex h-[148px] w-full max-w-[2.75rem] flex-col justify-end sm:max-w-11">
-                <div
-                  className="absolute inset-0 rounded-lg bg-muted/70 ring-1 ring-border/50 ring-inset dark:bg-muted/40"
-                  aria-hidden
-                />
-                <div
-                  className="relative z-[1] mx-0.5 rounded-md bg-linear-to-t from-primary from-40% via-primary/90 to-primary/75 shadow-[0_4px_14px_-2px_var(--primary)] ring-1 ring-primary/25 transition-all duration-200 group-hover/bar:from-primary group-hover/bar:shadow-[0_6px_20px_-4px_var(--primary)] dark:shadow-primary/35"
-                  style={{
-                    height: `${Math.max(pct, 12)}%`,
-                    minHeight: "1.25rem",
-                  }}
-                  title={`${label}: ${value} units`}
-                />
-              </div>
-              <span className="text-[10px] font-bold tracking-wide text-muted-foreground uppercase sm:text-[11px]">
-                {label}
-              </span>
-            </div>
-          )
-        })}
-      </div>
+    <div className="rounded-xl border border-border/50 bg-linear-to-b from-muted/50 to-muted/25 p-1 shadow-inner ring-1 ring-black/[0.03] ring-inset dark:from-muted/30 dark:to-muted/15 dark:ring-white/[0.04] sm:p-2">
+      <ChartContainer
+        config={weeklyOrdersChartConfig}
+        className="aspect-auto h-[min(260px,38vh)] min-h-[220px] w-full"
+        initialDimension={{ width: 480, height: 220 }}
+      >
+        <BarChart
+          accessibilityLayer
+          data={data}
+          margin={{ left: 4, right: 8, top: 12, bottom: 4 }}
+        >
+          <CartesianGrid
+            vertical={false}
+            strokeDasharray="3 3"
+            className="stroke-border/60"
+          />
+          <XAxis
+            dataKey="day"
+            tickLine={false}
+            axisLine={false}
+            tickMargin={10}
+          />
+          <YAxis
+            tickLine={false}
+            axisLine={false}
+            width={36}
+            tickMargin={8}
+          />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          <Bar
+            dataKey="units"
+            fill="var(--color-units)"
+            radius={[4, 4, 0, 0]}
+            maxBarSize={44}
+          />
+        </BarChart>
+      </ChartContainer>
     </div>
   )
 }
@@ -462,9 +488,9 @@ export function OverviewDashboard() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-5 px-4 py-5 pb-12 md:gap-6 md:px-6 md:py-6">
+    <div className="flex flex-1 flex-col gap-5 px-4 py-5 pb-10 md:gap-6 md:px-6 md:py-6">
       <section
-        className="relative overflow-hidden rounded-2xl border border-border/70 bg-card/90 p-5 shadow-md ring-1 shadow-primary/[0.06] ring-black/[0.04] md:p-6 dark:bg-card/80 dark:shadow-primary/12 dark:ring-white/[0.06]"
+        // className="relative overflow-hidden rounded-2xl border border-border/70 bg-card/90 p-5 shadow-md ring-1 shadow-primary/[0.06] ring-black/[0.04] md:p-6 dark:bg-card/80 dark:shadow-primary/12 dark:ring-white/[0.06]"
         aria-labelledby="overview-heading"
       >
         <div
@@ -484,21 +510,21 @@ export function OverviewDashboard() {
           />
 
           <div className="flex flex-wrap gap-2 lg:shrink-0">
-          <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          disabled={insight.loading}
-          onClick={onOverviewAi}
-        >
-          {insight.loading ? (
-            <RiLoader4Line className="size-4 animate-spin" aria-hidden />
-          ) : (
-            <RiFlashlightLine className="size-4" aria-hidden />
-          )}
-          AI executive brief
-        </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={cn("gap-2", aiInsightTriggerClass)}
+              disabled={insight.loading}
+              onClick={onOverviewAi}
+            >
+              {insight.loading ? (
+                <RiLoader4Line className="size-4 animate-spin" aria-hidden />
+              ) : (
+                <RiFlashlightLine className="size-4" aria-hidden />
+              )}
+              AI executive brief
+            </Button>
             <Button
               asChild
               variant="outline"
@@ -564,47 +590,52 @@ export function OverviewDashboard() {
       </div> */}
 
       {(insight.data?.summary || insight.data?.error) && (
-        <SurfaceCard className="border-primary/15 p-4 ring-1 ring-primary/10">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <h3 className="text-sm font-semibold">OpenRouter insight</h3>
-            {insight.data.purchaseHints && insight.data.purchaseHints.length > 0 && (
+        <AiInsightPanel
+          title="Executive brief"
+          subtitle="Ops snapshot from your dashboard stats · OpenRouter · human review recommended"
+          actions={
+            insight.data.purchaseHints &&
+            insight.data.purchaseHints.length > 0 ? (
               <Button type="button" size="sm" variant="secondary" onClick={onApplyHints}>
                 Add suggested signals
               </Button>
-            )}
-          </div>
+            ) : undefined
+          }
+        >
           {insight.data.error ? (
-            <p className="mt-2 text-sm text-destructive">{insight.data.error}</p>
+            <p className="text-sm text-destructive">{insight.data.error}</p>
           ) : (
             <>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              <p className="text-sm leading-relaxed text-foreground/90">
                 {insight.data.summary}
               </p>
               {insight.data.bullets && insight.data.bullets.length > 0 && (
-                <ul className="mt-3 list-inside list-disc text-sm text-foreground">
+                <ul className="mt-3 list-inside list-disc space-y-1 text-sm text-foreground">
                   {insight.data.bullets.map((b, i) => (
                     <li key={i}>{b}</li>
                   ))}
                 </ul>
               )}
               {insight.data.actions && insight.data.actions.length > 0 && (
-                <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+                <ul className="mt-3 space-y-1.5 border-t border-violet-500/10 pt-3 text-xs text-muted-foreground">
                   {insight.data.actions.map((a, i) => (
                     <li key={i} className="flex gap-2">
-                      <span className="font-semibold text-primary">{i + 1}.</span>
+                      <span className="font-semibold text-violet-700 dark:text-violet-300">
+                        {i + 1}.
+                      </span>
                       {a}
                     </li>
                   ))}
                 </ul>
               )}
               {insight.data.parseWarning && (
-                <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">
                   {insight.data.parseWarning}
                 </p>
               )}
             </>
           )}
-        </SurfaceCard>
+        </AiInsightPanel>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

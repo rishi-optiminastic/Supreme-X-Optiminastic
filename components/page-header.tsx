@@ -19,13 +19,13 @@ export function PageHeader({
   return (
     <header className={cn("relative space-y-3", className)}>
       <div className="flex items-center gap-3">
-        <span
+        {/* <span
           className="h-1 w-10 shrink-0 rounded-full bg-linear-to-r from-primary/40 to-primary"
           aria-hidden
-        />
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/90">
+        /> */}
+        {/* <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/90">
           {eyebrow}
-        </p>
+        </p> */}
       </div>
       <h1
         id={id}
@@ -33,9 +33,9 @@ export function PageHeader({
       >
         {title}
       </h1>
-      <p className="max-w-2xl text-pretty text-sm leading-relaxed text-muted-foreground">
+      {/* <p className="max-w-2xl text-pretty text-sm leading-relaxed text-muted-foreground">
         {description}
-      </p>
+      </p> */}
     </header>
   )
 }
