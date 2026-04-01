@@ -7,23 +7,23 @@ import { Input } from "@/components/ui/input"
 
 export default function SettingsPage() {
   return (
-    <div className="flex flex-1 flex-col gap-8 px-4 py-6 pb-12 md:px-6 md:py-8">
+    <div className="flex flex-1 flex-col gap-5 px-4 py-5 pb-10 md:px-6 md:py-6">
       <PageHeader
         title="Settings"
         description="Company profile, Odoo connection (saved in this browser), notifications, and workspace reset."
       />
 
-      <div className="grid max-w-2xl gap-6">
+      <div className="grid max-w-2xl gap-4">
         <OdooIntegrationCard />
 
         <SurfaceCard className="p-0 overflow-hidden">
-          <div className="border-b border-border/60 bg-muted/20 px-6 py-4">
+          <div className="border-b border-border/60 bg-muted/20 px-4 py-3">
             <h2 className="text-sm font-semibold tracking-tight">Company</h2>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               Shown in reports and exports
             </p>
           </div>
-          <div className="space-y-5 p-6">
+          <div className="space-y-4 p-4">
             <div className="space-y-2">
               <label
                 className="text-xs font-semibold text-foreground"
@@ -46,7 +46,7 @@ export default function SettingsPage() {
         </SurfaceCard>
 
         <SurfaceCard className="p-0 overflow-hidden">
-          <div className="border-b border-border/60 bg-muted/20 px-6 py-4">
+          <div className="border-b border-border/60 bg-muted/20 px-4 py-3">
             <h2 className="text-sm font-semibold tracking-tight">
               Notifications
             </h2>
@@ -54,7 +54,7 @@ export default function SettingsPage() {
               Email digests for order exceptions
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3 p-6">
+          <div className="flex flex-wrap items-center gap-3 p-4">
             <Button type="button" variant="secondary">
               Daily summary
             </Button>

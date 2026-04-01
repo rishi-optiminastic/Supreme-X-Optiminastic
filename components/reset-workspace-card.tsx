@@ -8,7 +8,7 @@ export function ResetWorkspaceCard() {
   const { resetWorkspace } = useAppData()
 
   return (
-    <SurfaceCard className="border-destructive/20 p-5 ring-destructive/10">
+    <SurfaceCard className="border-destructive/20 p-4 ring-destructive/10">
       <h2 className="text-sm font-semibold tracking-tight">Workspace data</h2>
       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
         Clears saved inventory adjustments, trend sources, purchase signals,

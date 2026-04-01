@@ -142,7 +142,7 @@ export function TrendsWorkspace() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-8 px-4 py-6 pb-12 md:gap-10 md:px-6 md:py-8">
+    <div className="flex flex-1 flex-col gap-5 px-4 py-5 pb-10 md:gap-6 md:px-6 md:py-6">
       <DataSourceBanner
         source={dataSource}
         loading={odooLoading}
@@ -183,7 +183,7 @@ export function TrendsWorkspace() {
       </div>
 
       {(insight.data?.summary || insight.data?.error) && (
-        <SurfaceCard className="border-primary/15 p-5 ring-1 ring-primary/10">
+        <SurfaceCard className="border-primary/15 p-4 ring-1 ring-primary/10">
           <h3 className="text-sm font-semibold">OpenRouter insight</h3>
           {insight.data.error ? (
             <p className="mt-2 text-sm text-destructive">{insight.data.error}</p>
@@ -210,7 +210,7 @@ export function TrendsWorkspace() {
       )}
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <SurfaceCard className="p-5">
+        <SurfaceCard className="p-4">
           <div className="mb-2 flex items-center gap-2">
             <RiGlobalLine className="size-4 text-primary" aria-hidden />
             <h2 className="text-sm font-semibold tracking-tight">
@@ -226,7 +226,7 @@ export function TrendsWorkspace() {
             colorVar="var(--chart-2)"
           />
         </SurfaceCard>
-        <SurfaceCard className="p-5">
+        <SurfaceCard className="p-4">
           <div className="mb-2 flex items-center gap-2">
             <RiPulseLine className="size-4 text-primary" aria-hidden />
             <h2 className="text-sm font-semibold tracking-tight">
@@ -242,7 +242,7 @@ export function TrendsWorkspace() {
             colorVar="var(--chart-3)"
           />
         </SurfaceCard>
-        <SurfaceCard className="border-primary/20 p-5 ring-1 ring-primary/15">
+        <SurfaceCard className="border-primary/20 p-4 ring-1 ring-primary/15">
           <h2 className="text-sm font-semibold tracking-tight">Prediction</h2>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             Blend: 45% market + 55% system. Updates when you run forecast.
@@ -271,7 +271,7 @@ export function TrendsWorkspace() {
 
       <div className="grid gap-4 lg:grid-cols-5">
         <SurfaceCard className="p-0 overflow-hidden lg:col-span-2">
-          <div className="border-b border-border/60 bg-muted/20 px-5 py-4">
+          <div className="border-b border-border/60 bg-muted/20 px-4 py-3">
             <h2 className="text-base font-semibold tracking-tight">
               Trend sources
             </h2>
@@ -284,7 +284,7 @@ export function TrendsWorkspace() {
             {trendSources.map((s) => (
               <li
                 key={s.id}
-                className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"
+                className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5"
               >
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{s.name}</p>
@@ -316,7 +316,7 @@ export function TrendsWorkspace() {
               </li>
             ))}
           </ul>
-          <div className="space-y-3 border-t border-border/60 bg-muted/15 p-5">
+          <div className="space-y-3 border-t border-border/60 bg-muted/15 p-4">
             <p className="text-xs font-semibold text-foreground">Add source</p>
             <Input
               placeholder="Source name"
@@ -355,7 +355,7 @@ export function TrendsWorkspace() {
         </SurfaceCard>
 
         <SurfaceCard className="p-0 overflow-hidden lg:col-span-3">
-          <div className="border-b border-border/60 bg-muted/20 px-5 py-4">
+          <div className="border-b border-border/60 bg-muted/20 px-4 py-3">
             <h2 className="text-base font-semibold tracking-tight">
               Activity &amp; variant trend
             </h2>
@@ -364,7 +364,7 @@ export function TrendsWorkspace() {
             </p>
           </div>
           <div className="grid gap-0 md:grid-cols-2">
-            <div className="border-b border-border/50 p-5 md:border-b-0 md:border-r">
+            <div className="border-b border-border/50 p-4 md:border-b-0 md:border-r">
               <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Feed
               </p>
@@ -385,7 +385,7 @@ export function TrendsWorkspace() {
                 </ul>
               )}
             </div>
-            <div className="p-5">
+            <div className="p-4">
               <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Top variants by trend
               </p>
@@ -418,7 +418,7 @@ export function TrendsWorkspace() {
       </div>
 
       <SurfaceCard className="p-0 overflow-hidden">
-        <div className="border-b border-border/60 bg-muted/20 px-6 py-4">
+        <div className="border-b border-border/60 bg-muted/20 px-4 py-3">
           <h2 className="text-base font-semibold tracking-tight">
             Flow comparison
           </h2>
@@ -426,8 +426,8 @@ export function TrendsWorkspace() {
             Inbound vs outbound units (thousands), trailing six months.
           </p>
         </div>
-        <div className="p-6">
-          <div className="mb-6 flex flex-wrap items-center gap-3">
+        <div className="p-4">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
             <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/80 px-3 py-1.5 text-xs font-semibold shadow-sm">
               <span
                 className="size-2 rounded-full bg-primary shadow-sm ring-1 ring-primary/30"
@@ -444,7 +444,7 @@ export function TrendsWorkspace() {
               Outbound
             </span>
           </div>
-          <div className="rounded-xl bg-muted/35 p-5 ring-1 ring-inset ring-border/45">
+          <div className="rounded-xl bg-muted/35 p-4 ring-1 ring-inset ring-border/45">
             <div className="flex h-56 items-end gap-1.5 sm:gap-3">
               {months.map((m, i) => (
                 <div

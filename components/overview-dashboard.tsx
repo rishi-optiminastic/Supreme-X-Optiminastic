@@ -462,9 +462,9 @@ export function OverviewDashboard() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 px-4 py-6 pb-14 md:gap-8 md:px-6 md:py-8">
+    <div className="flex flex-1 flex-col gap-5 px-4 py-5 pb-12 md:gap-6 md:px-6 md:py-6">
       <section
-        className="relative overflow-hidden rounded-3xl border border-border/70 bg-card/90 p-6 shadow-lg ring-1 shadow-primary/[0.07] ring-black/[0.04] md:p-8 dark:bg-card/80 dark:shadow-primary/15 dark:ring-white/[0.06]"
+        className="relative overflow-hidden rounded-2xl border border-border/70 bg-card/90 p-5 shadow-md ring-1 shadow-primary/[0.06] ring-black/[0.04] md:p-6 dark:bg-card/80 dark:shadow-primary/12 dark:ring-white/[0.06]"
         aria-labelledby="overview-heading"
       >
         <div
@@ -484,6 +484,21 @@ export function OverviewDashboard() {
           />
 
           <div className="flex flex-wrap gap-2 lg:shrink-0">
+          <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          disabled={insight.loading}
+          onClick={onOverviewAi}
+        >
+          {insight.loading ? (
+            <RiLoader4Line className="size-4 animate-spin" aria-hidden />
+          ) : (
+            <RiFlashlightLine className="size-4" aria-hidden />
+          )}
+          AI executive brief
+        </Button>
             <Button
               asChild
               variant="outline"
@@ -523,14 +538,14 @@ export function OverviewDashboard() {
         </div>
       </section>
 
-      <DataSourceBanner
+      {/* <DataSourceBanner
         source={source}
         loading={odooLoading}
         error={odooError}
         onRefresh={refetchOdoo}
-      />
+      /> */}
 
-      <div className="flex flex-wrap items-center justify-end gap-2">
+      {/* <div className="flex flex-wrap items-center justify-end gap-2">
         <Button
           type="button"
           variant="outline"
@@ -546,10 +561,10 @@ export function OverviewDashboard() {
           )}
           AI executive brief
         </Button>
-      </div>
+      </div> */}
 
       {(insight.data?.summary || insight.data?.error) && (
-        <SurfaceCard className="border-primary/15 p-5 ring-1 ring-primary/10">
+        <SurfaceCard className="border-primary/15 p-4 ring-1 ring-primary/10">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <h3 className="text-sm font-semibold">OpenRouter insight</h3>
             {insight.data.purchaseHints && insight.data.purchaseHints.length > 0 && (
@@ -601,7 +616,7 @@ export function OverviewDashboard() {
           >
             <SurfaceCard
               elevated
-              className="relative h-full overflow-hidden p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-lg hover:shadow-primary/10"
+              className="relative h-full overflow-hidden p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-md hover:shadow-primary/10"
             >
               <div
                 className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-linear-to-r from-primary/0 via-primary/50 to-primary/0 opacity-0 transition-opacity duration-200 group-hover/kpi:opacity-100"
@@ -649,9 +664,9 @@ export function OverviewDashboard() {
         ))}
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <SurfaceCard elevated className="overflow-hidden p-0">
-          <div className="border-b border-border/60 bg-linear-to-r from-muted/40 via-muted/25 to-transparent px-5 py-4">
+          <div className="border-b border-border/60 bg-linear-to-r from-muted/40 via-muted/25 to-transparent px-4 py-3">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div className="space-y-1">
                 <h2 className="text-base font-semibold tracking-tight">
@@ -666,13 +681,13 @@ export function OverviewDashboard() {
               </span>
             </div>
           </div>
-          <div className="p-4 sm:p-5">
+          <div className="p-3 sm:p-4">
             <FulfillmentLineChart />
           </div>
         </SurfaceCard>
 
         <SurfaceCard elevated className="overflow-hidden p-0">
-          <div className="border-b border-border/60 bg-linear-to-r from-muted/40 via-muted/25 to-transparent px-5 py-4">
+          <div className="border-b border-border/60 bg-linear-to-r from-muted/40 via-muted/25 to-transparent px-4 py-3">
             <h2 className="text-base font-semibold tracking-tight">
               Orders this week
             </h2>
@@ -686,18 +701,18 @@ export function OverviewDashboard() {
               )}
             </p>
           </div>
-          <div className="p-4 sm:p-5">
+          <div className="p-3 sm:p-4">
             <BarChartBlock />
           </div>
         </SurfaceCard>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-5">
-        <SurfaceCard elevated className="p-5 lg:col-span-2">
+      <div className="grid gap-4 lg:grid-cols-5">
+        <SurfaceCard elevated className="p-4 lg:col-span-2">
           <h2 className="text-base font-semibold tracking-tight">
             Category mix
           </h2>
-          <p className="mt-1 mb-6 text-xs leading-relaxed text-muted-foreground">
+          <p className="mt-1 mb-4 text-xs leading-relaxed text-muted-foreground">
             Share of outbound volume by merchandising class.
             {source === "odoo" && (
               <span className="mt-1 block text-[10px] text-muted-foreground/90">
@@ -709,7 +724,7 @@ export function OverviewDashboard() {
         </SurfaceCard>
 
         <SurfaceCard elevated className="overflow-hidden p-0 lg:col-span-3">
-          <div className="border-b border-border/60 bg-linear-to-r from-muted/40 via-muted/25 to-transparent px-5 py-4">
+          <div className="border-b border-border/60 bg-linear-to-r from-muted/40 via-muted/25 to-transparent px-4 py-3">
             <h2 className="text-base font-semibold tracking-tight">
               Recent sales orders
             </h2>
@@ -723,10 +738,10 @@ export function OverviewDashboard() {
             <table className="w-full min-w-[480px] text-sm">
               <thead>
                 <tr className="border-b border-border/60 bg-muted/30 text-left text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                  <th className="px-5 py-3.5">Order</th>
-                  <th className="px-5 py-3.5">Customer</th>
-                  <th className="px-5 py-3.5 text-right">Amount</th>
-                  <th className="px-5 py-3.5 text-right">Status</th>
+                  <th className="px-4 py-2.5">Order</th>
+                  <th className="px-4 py-2.5">Customer</th>
+                  <th className="px-4 py-2.5 text-right">Amount</th>
+                  <th className="px-4 py-2.5 text-right">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
@@ -735,14 +750,14 @@ export function OverviewDashboard() {
                     key={row.id}
                     className="transition-colors hover:bg-muted/40"
                   >
-                    <td className="px-5 py-3.5 font-mono text-xs text-muted-foreground">
+                    <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">
                       {row.id}
                     </td>
-                    <td className="px-5 py-3.5 font-medium">{row.customer}</td>
-                    <td className="px-5 py-3.5 text-right font-medium tabular-nums">
+                    <td className="px-4 py-2.5 font-medium">{row.customer}</td>
+                    <td className="px-4 py-2.5 text-right font-medium tabular-nums">
                       {row.amount}
                     </td>
-                    <td className="px-5 py-3.5 text-right">
+                    <td className="px-4 py-2.5 text-right">
                       <span
                         className={cn(
                           "inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold",

@@ -86,7 +86,7 @@ export function OdooIntegrationCard() {
 
   return (
     <SurfaceCard className="overflow-hidden p-0">
-      <div className="border-b border-border/60 bg-linear-to-r from-primary/[0.07] via-muted/30 to-transparent px-6 py-4">
+      <div className="border-b border-border/60 bg-linear-to-r from-primary/[0.07] via-muted/30 to-transparent px-4 py-3">
         <h2 className="text-sm font-semibold tracking-tight">Odoo integration</h2>
         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
           Connection uses{" "}
@@ -112,7 +112,7 @@ export function OdooIntegrationCard() {
           <RiExternalLinkLine className="size-3.5" aria-hidden />
         </a>
       </div>
-      <div className="space-y-5 p-6">
+      <div className="space-y-4 p-4">
         <div>
           <p className="mb-2 text-xs font-semibold text-foreground">
             Environment checklist

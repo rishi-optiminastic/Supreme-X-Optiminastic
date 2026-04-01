@@ -154,7 +154,7 @@ export function SignalsDashboard() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-8 px-4 py-6 pb-12 md:gap-10 md:px-6 md:py-8">
+    <div className="flex flex-1 flex-col gap-5 px-4 py-5 pb-10 md:gap-6 md:px-6 md:py-6">
       <PageHeader
         title="Purchase &amp; sales signals"
         description="Market read per product, purchase signal queue, and one-click push into the trend activity feed. State persists in your browser."
@@ -186,7 +186,7 @@ export function SignalsDashboard() {
       </div>
 
       {(insight.data?.summary || insight.data?.error) && (
-        <SurfaceCard className="border-primary/15 p-5 ring-1 ring-primary/10">
+        <SurfaceCard className="border-primary/15 p-4 ring-1 ring-primary/10">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <h3 className="text-sm font-semibold">OpenRouter insight</h3>
             {insight.data.purchaseHints && insight.data.purchaseHints.length > 0 && (
@@ -220,7 +220,7 @@ export function SignalsDashboard() {
       )}
 
       <div className="grid gap-4 md:grid-cols-3">
-        <SurfaceCard className="p-5">
+        <SurfaceCard className="p-4">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             <RiShoppingBag3Line className="size-3.5" aria-hidden />
             Open purchase signals
@@ -232,7 +232,7 @@ export function SignalsDashboard() {
             Awaiting PO or dismiss
           </p>
         </SurfaceCard>
-        <SurfaceCard className="p-5">
+        <SurfaceCard className="p-4">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             <RiLineChartLine className="size-3.5" aria-hidden />
             Allocated (sales pull)
@@ -244,7 +244,7 @@ export function SignalsDashboard() {
             Reserved units across variants
           </p>
         </SurfaceCard>
-        <SurfaceCard className="p-5">
+        <SurfaceCard className="p-4">
           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Available to promise
           </div>
@@ -259,7 +259,7 @@ export function SignalsDashboard() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <SurfaceCard className="p-0 overflow-hidden">
-          <div className="flex flex-col gap-3 border-b border-border/60 bg-muted/20 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 border-b border-border/60 bg-muted/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-base font-semibold tracking-tight">
                 Market analysis (product)
@@ -280,7 +280,7 @@ export function SignalsDashboard() {
               Refresh
             </Button>
           </div>
-          <div className="space-y-4 p-5">
+          <div className="space-y-4 p-4">
             <div className="flex flex-wrap gap-2">
               {products.map((p) => (
                 <Button
@@ -350,7 +350,7 @@ export function SignalsDashboard() {
         </SurfaceCard>
 
         <SurfaceCard className="p-0 overflow-hidden">
-          <div className="border-b border-border/60 bg-muted/20 px-5 py-4">
+          <div className="border-b border-border/60 bg-muted/20 px-4 py-3">
             <h2 className="text-base font-semibold tracking-tight">
               Manual purchase signal
             </h2>
@@ -358,7 +358,7 @@ export function SignalsDashboard() {
               Adds to the queue; then send to Trends.
             </p>
           </div>
-          <div className="space-y-3 p-5">
+          <div className="space-y-3 p-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold" htmlFor="sig-sku">
@@ -437,7 +437,7 @@ export function SignalsDashboard() {
       </div>
 
       <SurfaceCard className="p-0 overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-border/60 bg-muted/20 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-b border-border/60 bg-muted/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-base font-semibold tracking-tight">
               Purchase signal queue
@@ -453,7 +453,7 @@ export function SignalsDashboard() {
           </div>
         </div>
         {genMsg && (
-          <p className="border-b border-border/50 bg-primary/5 px-5 py-2 text-xs text-primary">
+          <p className="border-b border-border/50 bg-primary/5 px-4 py-2 text-xs text-primary">
             {genMsg}
           </p>
         )}
@@ -461,12 +461,12 @@ export function SignalsDashboard() {
           <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b border-border/60 bg-muted/25 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <th className="px-5 py-3">Product / variant</th>
-                <th className="px-5 py-3">SKU</th>
-                <th className="px-5 py-3 text-right">Qty</th>
-                <th className="px-5 py-3">Urgency</th>
-                <th className="px-5 py-3">Reason</th>
-                <th className="px-5 py-3 text-right">Actions</th>
+                <th className="px-4 py-2.5">Product / variant</th>
+                <th className="px-4 py-2.5">SKU</th>
+                <th className="px-4 py-2.5 text-right">Qty</th>
+                <th className="px-4 py-2.5">Urgency</th>
+                <th className="px-4 py-2.5">Reason</th>
+                <th className="px-4 py-2.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
@@ -474,7 +474,7 @@ export function SignalsDashboard() {
                 <tr>
                   <td
                     colSpan={6}
-                    className="px-5 py-10 text-center text-muted-foreground"
+                    className="px-4 py-8 text-center text-muted-foreground"
                   >
                     No signals. Flag from Inventory, generate from low cover, or
                     add manually.
@@ -483,17 +483,17 @@ export function SignalsDashboard() {
               ) : (
                 purchaseSignals.map((s) => (
                   <tr key={s.id} className="hover:bg-muted/25">
-                    <td className="px-5 py-3">
+                    <td className="px-4 py-2.5">
                       <p className="font-medium">{s.productName}</p>
                       <p className="text-xs text-muted-foreground">
                         {s.variantLabel}
                       </p>
                     </td>
-                    <td className="px-5 py-3 font-mono text-xs">{s.sku}</td>
-                    <td className="px-5 py-3 text-right tabular-nums">
+                    <td className="px-4 py-2.5 font-mono text-xs">{s.sku}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">
                       {s.qtySuggestion}
                     </td>
-                    <td className="px-5 py-3">
+                    <td className="px-4 py-2.5">
                       <span
                         className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
                           s.urgency === "high"
@@ -506,10 +506,10 @@ export function SignalsDashboard() {
                         {s.urgency}
                       </span>
                     </td>
-                    <td className="max-w-[200px] px-5 py-3 text-xs text-muted-foreground">
+                    <td className="max-w-[200px] px-4 py-2.5 text-xs text-muted-foreground">
                       {s.reason}
                     </td>
-                    <td className="px-5 py-3 text-right">
+                    <td className="px-4 py-2.5 text-right">
                       <div className="flex flex-wrap justify-end gap-1.5">
                         {s.sentToTrends ? (
                           <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">

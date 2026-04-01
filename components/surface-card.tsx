@@ -15,10 +15,10 @@ export function SurfaceCard({
   return (
     <div
       className={cn(
-        "rounded-2xl border border-border/60 bg-card text-card-foreground",
-        "shadow-md shadow-black/[0.04] ring-1 ring-black/[0.04] dark:bg-card/95 dark:shadow-black/30 dark:ring-white/[0.06]",
+        "rounded-xl border border-border/60 bg-card text-card-foreground",
+        "shadow-sm shadow-black/5 ring-1 ring-black/5 dark:bg-card/95 dark:shadow-black/20 dark:ring-white/5",
         elevated &&
-          "shadow-lg shadow-black/[0.06] ring-black/[0.05] dark:shadow-black/40 dark:ring-white/[0.08]",
+          "shadow-md shadow-black/8 ring-black/5 dark:shadow-black/30 dark:ring-white/8",
         className
       )}
       {...props}
