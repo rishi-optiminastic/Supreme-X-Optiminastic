@@ -2,7 +2,7 @@
 
 import * as React from "react"
 
-import type { InventoryVariant } from "@/components/app-data-context"
+import type { InventoryVariant } from "@/lib/inventory-types"
 import type { OdooOrderDTO, OdooVariantDTO } from "@/lib/odoo/types"
 
 export type OdooLiveState = {

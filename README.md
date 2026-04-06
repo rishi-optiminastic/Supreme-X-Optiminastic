@@ -1,6 +1,20 @@
-# Next.js template
+# Supreme Odoo
 
-This is a Next.js template with shadcn/ui.
+Next.js app that connects to **Odoo** (or demo data) for inventory-aware **demand**, **shelf price (RSP)**, **restock** planning, **inventory labels**, **workflow** (draft PO/SO in Odoo + stock confirmation), and light **ideas**.
+
+**Full walkthrough:** [docs/how-it-works.md](./docs/how-it-works.md)
+
+---
+
+## Stack
+
+Next.js (App Router), Tailwind, shadcn-style UI, Odoo JSON-RPC, optional OpenRouter for `/api/ai/insights`.
+
+---
+
+## Original template note
+
+Below is the original shadcn template blurb for adding components.
 
 ## Adding components
 

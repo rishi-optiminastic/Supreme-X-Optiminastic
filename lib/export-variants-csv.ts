@@ -1,4 +1,4 @@
-import type { InventoryVariant } from "@/components/app-data-context"
+import type { InventoryVariant } from "@/lib/inventory-types"
 
 export function downloadVariantsCsv(
   variants: InventoryVariant[],

@@ -12,6 +12,10 @@ export type OdooVariantDTO = {
   trendScore: number
   /** Odoo `image_128` as data URL, or omitted when missing */
   imageUrl?: string
+  /** Optional: summed sale line qty (~90d) when API provides it */
+  salesQty90d?: number
+  /** Odoo `product.product` id for purchase/sale line RPC */
+  odooProductId?: number
 }
 
 export type OdooOrderDTO = {

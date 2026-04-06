@@ -92,7 +92,48 @@ export async function GET() {
       }
     }
 
-    const variants = raw.map((p, i) => mapOdooProductToVariant(p, i))
+    let variants = raw.map((p, i) => mapOdooProductToVariant(p, i))
+
+    const qtyByProductId: Record<string, number> = {}
+    try {
+      const since = new Date()
+      since.setDate(since.getDate() - 90)
+      const day = since.toISOString().slice(0, 10)
+      const lines = (await odooExecuteKw<Record<string, unknown>[]>(
+        cfg.url,
+        cfg.database,
+        uid,
+        cfg.apiKey,
+        "sale.order.line",
+        "search_read",
+        [
+          [
+            ["order_id.state", "in", ["sale", "done"]],
+            ["order_id.date_order", ">=", day],
+          ],
+        ],
+        {
+          fields: ["product_id", "product_uom_qty"],
+          limit: 5000,
+        }
+      )) as Record<string, unknown>[]
+      for (const row of lines ?? []) {
+        const pid = row.product_id
+        const qty = Number(row.product_uom_qty ?? 0)
+        if (!Array.isArray(pid) || pid[0] == null) continue
+        const key = String(pid[0])
+        qtyByProductId[key] = (qtyByProductId[key] ?? 0) + qty
+      }
+    } catch {
+      /* optional: model/ACL/date format differs per Odoo */
+    }
+
+    variants = variants.map((v) => {
+      const idPart = v.id.replace(/^odoo-/, "")
+      const q = qtyByProductId[idPart]
+      if (q == null || q <= 0) return v
+      return { ...v, salesQty90d: Math.round(q) }
+    })
 
     let orders: ReturnType<typeof mapOdooSaleOrder>[] = []
     try {

@@ -25,8 +25,22 @@ export function getOdooEnv(): OdooEnvConfig {
 }
 
 /** Safe to expose to the client */
+function parseOptionalInt(v: string | undefined): number | null {
+  const n = Number.parseInt((v ?? "").trim(), 10)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/** Default vendor (PO) and customer (SO) `res.partner` ids — set in .env for one-click create. */
+export function getOdooWorkflowPartnerIds() {
+  return {
+    poPartnerId: parseOptionalInt(process.env.ODOO_PO_PARTNER_ID),
+    soPartnerId: parseOptionalInt(process.env.ODOO_SO_PARTNER_ID),
+  }
+}
+
 export function getOdooStatusPublic() {
   const c = getOdooEnv()
+  const partners = getOdooWorkflowPartnerIds()
   let host = ""
   try {
     if (c.url) host = new URL(c.url).hostname
@@ -42,5 +56,7 @@ export function getOdooStatusPublic() {
     openrouterConfigured: Boolean(
       (process.env.OPENROUTER_API_KEY ?? "").trim()
     ),
+    defaultPoPartnerId: partners.poPartnerId,
+    defaultSoPartnerId: partners.soPartnerId,
   }
 }

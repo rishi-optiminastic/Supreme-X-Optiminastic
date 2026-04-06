@@ -7,6 +7,8 @@ export function mapOdooProductToVariant(
   p: OdooProduct,
   index: number
 ): OdooVariantDTO {
+  const numericId =
+    typeof p.id === "number" ? p.id : Number.parseInt(String(p.id ?? ""), 10)
   const id = String(p.id ?? index)
   const name = String(p.name ?? "Product").split("\n")[0]?.slice(0, 120) ?? "Product"
   const sku =
@@ -57,6 +59,7 @@ export function mapOdooProductToVariant(
     trendScore,
   }
   if (imageUrl) dto.imageUrl = imageUrl
+  if (Number.isFinite(numericId) && numericId > 0) dto.odooProductId = numericId
   return dto
 }
 

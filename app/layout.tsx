@@ -1,9 +1,8 @@
 import { Geist_Mono, Public_Sans } from "next/font/google"
-
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
-import { AppShell } from "@/components/app-shell"
 import { cn } from "@/lib/utils"
+import { AppFrame } from "@/components/app-frame"
+import { ThemeProvider } from "@/components/theme-provider"
 
 const publicSans = Public_Sans({subsets:['latin'],variable:'--font-sans'})
 
@@ -25,7 +24,7 @@ export default function RootLayout({
     >
       <body>
         <ThemeProvider>
-          <AppShell>{children}</AppShell>
+          <AppFrame>{children}</AppFrame>
         </ThemeProvider>
       </body>
     </html>
