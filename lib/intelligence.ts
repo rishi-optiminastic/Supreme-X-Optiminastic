@@ -130,17 +130,6 @@ export function demandProbabilityBreakdown(
   return { total, bandLow, bandHigh, parts, rawBeforeClamp }
 }
 
-/**
- * Probability (%) that demand stays strong in the next ~30 days.
- */
-export function demandProbabilityHigh30d(
-  v: InventoryVariant,
-  external: ExternalSignals = defaultExternalSignals,
-  opts?: { regionHeat?: number; categoryHeat?: number }
-): number {
-  return demandProbabilityBreakdown(v, external, opts).total
-}
-
 export function suggestedReorderQty(
   v: InventoryVariant,
   leadWeeks = 2,
@@ -403,14 +392,6 @@ export function computeRspAnalysis(input: RspInput): RspAnalysis | null {
   }
 }
 
-export function computeRspScenarios(input: RspInput): {
-  suggested: number
-  scenarios: RspScenario[]
-} {
-  const a = computeRspAnalysis(input)
-  if (!a) return { suggested: 0, scenarios: [] }
-  return { suggested: a.suggested, scenarios: a.scenarios }
-}
 
 /** Short copy for the pricing UI from stock + trend. */
 export function pricingPowerHint(v: InventoryVariant): string {

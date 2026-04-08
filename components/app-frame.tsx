@@ -7,12 +7,11 @@ import { cn } from "@/lib/utils"
 
 const links = [
   { href: "/", label: "Home" },
-  { href: "/workflow", label: "Workflow" },
-  { href: "/prediction", label: "Demand" },
-  { href: "/pricing", label: "Price" },
-  { href: "/smart-orders", label: "Restock" },
+  { href: "/workflow", label: "PO→SO Flow" },
+  { href: "/prediction", label: "Trends" },
+  { href: "/pricing", label: "RSP" },
+  { href: "/purchase", label: "Order creation" },
   { href: "/stock-health", label: "Inventory" },
-  { href: "/conversion", label: "Ideas" },
 ] as const
 
 export function AppFrame({ children }: { children: React.ReactNode }) {
@@ -53,7 +52,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:py-10">{children}</main>
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:py-10">{children}</main>
     </div>
   )
 }

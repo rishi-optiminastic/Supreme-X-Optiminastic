@@ -124,39 +124,3 @@ export function reorderRows(
   })
 }
 
-export type ScenarioSkuRow = {
-  sku: string
-  productName: string
-  weeksCoverNow: number
-  weeksCoverAdjusted: number
-  tight: boolean
-}
-
-/** demandPct: e.g. 20 = +20% weekly demand. extraLeadDays extends time you wait for stock. */
-export function scenarioRows(
-  variants: InventoryVariant[],
-  demandPct: number,
-  extraLeadDays: number
-): { rows: ScenarioSkuRow[]; tightCount: number; totalOnHand: number } {
-  const mult = 1 + demandPct / 100
-  const extraWeeks = extraLeadDays / 7
-  let tightCount = 0
-  let totalOnHand = 0
-  const rows: ScenarioSkuRow[] = variants.map((v) => {
-    totalOnHand += v.onHand
-    const w = weeklyDemand(v)
-    const adjW = Math.max(0.01, w * mult)
-    const adjCover = v.onHand / adjW
-    const tight = adjCover < 1 + extraWeeks
-    if (tight) tightCount++
-    return {
-      sku: v.sku,
-      productName: v.productName,
-      weeksCoverNow: round1(v.weeksCover),
-      weeksCoverAdjusted: round1(adjCover),
-      tight,
-    }
-  })
-  rows.sort((a, b) => a.weeksCoverAdjusted - b.weeksCoverAdjusted)
-  return { rows, tightCount, totalOnHand }
-}

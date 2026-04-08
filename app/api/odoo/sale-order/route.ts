@@ -1,6 +1,6 @@
 import { createSaleOrder } from "@/lib/odoo/create-orders"
 import { getOdooEnv, getOdooWorkflowPartnerIds } from "@/lib/odoo/env"
-import { odooAuthenticate } from "@/lib/odoo/jsonrpc"
+import { odooAuthenticate, odooExecuteKw } from "@/lib/odoo/jsonrpc"
 
 type Line = { productId: number; quantity: number }
 
@@ -57,6 +57,46 @@ export async function POST(req: Request) {
       cfg.username,
       cfg.apiKey
     )
+    const soModelCount = await odooExecuteKw<number>(
+      cfg.url,
+      cfg.database,
+      uid,
+      cfg.apiKey,
+      "ir.model",
+      "search_count",
+      [[["model", "=", "sale.order"]]]
+    )
+    if (!soModelCount) {
+      return Response.json(
+        {
+          ok: false,
+          message:
+            "Model `sale.order` is not available in this Odoo database. Install/enable the Sales app, then retry.",
+        },
+        { status: 400 }
+      )
+    }
+
+    const partnerExists = await odooExecuteKw<number>(
+      cfg.url,
+      cfg.database,
+      uid,
+      cfg.apiKey,
+      "res.partner",
+      "search_count",
+      [[["id", "=", partnerId]]]
+    )
+    if (!partnerExists) {
+      return Response.json(
+        {
+          ok: false,
+          message:
+            "Customer partner id not found in Odoo. Use the contact's internal ID from Contacts (res.partner).",
+        },
+        { status: 400 }
+      )
+    }
+
     const saleOrderId = await createSaleOrder(cfg, uid, partnerId, lines)
     return Response.json({
       ok: true,
