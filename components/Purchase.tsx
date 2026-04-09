@@ -617,30 +617,31 @@ const Purchase = () => {
     <div className="space-y-3 pb-8">
       <div className="grid items-start gap-3 lg:grid-cols-12">
         <div className="flex items-start gap-3 lg:col-span-8">
-          <div className="mt-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+          {/* <div className="mt-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
             <RiShoppingCart2Line className="size-6 text-primary" aria-hidden />
-          </div>
+          </div> */}
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Retailer order</h1>
-            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-              Upload each retailer&apos;s template once. Your lines merge into that file for download — Excel uses{" "}
-              <span className="font-medium text-foreground">{"{{placeholders}}"}</span> in cells; PDFs need fillable
-              text fields (see left panel).
-            </p>
+            <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Order creation</h1>
+            {/* <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+              Upload each retailer&apos;s template once. Downloaded <span className="font-medium text-foreground">.xlsx</span>{" "}
+              files keep the original workbook design (colors, fonts, formulas). You can use{" "}
+              <span className="font-medium text-foreground">{"{{placeholders}}"}</span> in cells, or common layouts like the
+              Vertex42-style order form are filled automatically. PDFs need fillable text fields (see left panel).
+            </p> */}
           </div>
         </div>
-        <Panel className="flex flex-wrap items-center gap-3 border-primary/25 bg-primary/5 p-3 text-sm lg:col-span-4 lg:justify-self-end">
+        {/* <Panel className="flex flex-wrap items-center gap-3 border-primary/25 bg-primary/5 p-3 text-sm lg:col-span-4 lg:justify-self-end">
           <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
             3
           </span>
           <span className="text-muted-foreground">Next:</span>
-          <Link href="/workflow" className="font-semibold text-primary underline-offset-4 hover:underline">
-            Workflow →
+          <Link href="/stock-health" className="font-semibold text-primary underline-offset-4 hover:underline">
+            Inventory →
           </Link>
-        </Panel>
+        </Panel> */}
       </div>
 
-      {bannerMessages.length > 0 ? (
+      {/* {bannerMessages.length > 0 ? (
         <div
           className={cn(
             "rounded-lg border px-3 py-2 text-sm",
@@ -655,7 +656,7 @@ const Purchase = () => {
             </p>
           ))}
         </div>
-      ) : null}
+      ) : null} */}
 
       <div className="grid items-stretch gap-3 lg:grid-cols-12">
         <Panel className="space-y-3 overflow-y-auto border-border/60 bg-card/95 p-3 lg:col-span-3 lg:max-h-[min(88vh,960px)] lg:overflow-y-auto">
@@ -691,7 +692,8 @@ const Purchase = () => {
           <div className="rounded-xl border border-border/60 bg-muted/20 p-3 shadow-sm">
             <p className="text-xs font-semibold tracking-tight text-foreground">Excel / CSV / Google Sheets</p>
             <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-              Put tokens in cells (exact text). We replace them when you download.
+              Put tokens in cells (exact text). We replace them when you download. Branded templates without tokens still
+              export with full styling — line tables are detected by column headers (QTY, DESCRIPTION, UNIT PRICE, etc.).
             </p>
             <p className="mt-2 break-all font-mono text-[10px] leading-relaxed text-muted-foreground">
               {"{{ORDER_REF}} {{ORDER_DATE}} {{DELIVERY_DATE}} {{RETAILER_NAME}} {{RETAILER_CODE}} {{DELIVER_TO}} {{CURRENCY}} {{PAYMENT_TERMS}} {{NOTES}} {{LINE_ITEMS}} {{NET_TOTAL}} {{GROSS_TOTAL}} {{AFTER_DISCOUNT_TOTAL}} {{VAT_TOTAL}} {{QTY_TOTAL}}"}
@@ -1067,7 +1069,7 @@ const Purchase = () => {
             ) : null}
           </Panel>
 
-          <details className="group rounded-xl border border-border/60 bg-card p-4 shadow-sm">
+          {/* <details className="group rounded-xl border border-border/60 bg-card p-4 shadow-sm">
             <summary className="cursor-pointer text-sm font-semibold outline-none [&::-webkit-details-marker]:hidden">
               <span className="inline-flex w-full items-center justify-between">
                 More tools
@@ -1081,7 +1083,7 @@ const Purchase = () => {
                   Save for Workflow
                 </Button>
                 <Button type="button" variant="outline" size="sm" asChild>
-                  <Link href="/workflow">Workflow</Link>
+                  <Link href="/stock-health">Inventory</Link>
                 </Button>
                 <Button
                   type="button"
@@ -1149,7 +1151,7 @@ const Purchase = () => {
                 )}
               </div>
             </div>
-          </details>
+          </details> */}
         </div>
       </div>
     </div>

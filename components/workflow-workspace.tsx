@@ -21,24 +21,24 @@ import { cn } from "@/lib/utils"
 const PIPELINE = [
   {
     step: 1,
-    title: "Trend Prediction",
-    desc: "Spot a product trend or get contacted by a supplier. Use AI to validate if it's worth buying.",
+    title: "Trends",
+    desc: "Spot demand strength, weeks of cover, and market context—then decide what to buy.",
     href: "/prediction",
     status: "navigate",
     icon: "🔮",
   },
   {
     step: 2,
-    title: "RSP Generator",
-    desc: "Enter your cost → get AI-powered pricing strategies. Approve the final shelf price.",
+    title: "RSP",
+    desc: "Enter base cost → review shelf scenarios and margins. Approve a price when ready.",
     href: "/pricing",
     status: "navigate",
     icon: "💰",
   },
   {
     step: 3,
-    title: "Retailer order creation",
-    desc: "Upload each retailer’s order template once, add products with rate and qty, then mail or download the filled form. Save lines for Odoo when needed.",
+    title: "Order creation",
+    desc: "Per-retailer templates, line items, mail or download filled Excel/PDF. Save a draft for Odoo when needed.",
     href: "/purchase",
     status: "navigate",
     icon: "📋",
@@ -177,7 +177,7 @@ export function WorkflowWorkspace() {
   /* ── Create PO ── */
   const createPo = async () => {
     setPoResult(null)
-    if (!poDraft?.lines.length) { setPoResult("No draft saved — go to Retailer order creation first."); return }
+    if (!poDraft?.lines.length) { setPoResult("No draft saved — go to Order creation first."); return }
     const partner = Number.parseInt(poPartnerId.trim(), 10)
     if (!Number.isFinite(partner) || partner <= 0) { setPoResult("Enter a vendor partner id."); return }
     const lines = poDraft.lines.filter((l) => l.odooProductId != null && l.qty > 0).map((l) => ({ productId: l.odooProductId!, quantity: l.qty }))
@@ -305,7 +305,7 @@ export function WorkflowWorkspace() {
         </div>
         {approvals.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No prices approved yet. Go to <Link href="/pricing" className="text-primary hover:underline">RSP Generator</Link> → Approve a price.
+            No prices approved yet. Go to <Link href="/pricing" className="text-primary hover:underline">RSP</Link> → Approve a price.
           </p>
         ) : (
           <ul className="space-y-2">
@@ -341,7 +341,7 @@ export function WorkflowWorkspace() {
           <h2 className="text-sm font-semibold">Send Purchase Order to Odoo</h2>
         </div>
         <p className="text-xs text-muted-foreground">
-          Lines saved from <Link href="/purchase" className="text-primary hover:underline">Retailer order creation</Link> appear here.
+          Lines saved from <Link href="/purchase" className="text-primary hover:underline">Order creation</Link> appear here.
           Enter your vendor&apos;s partner id and send to Odoo.
         </p>
         {poDraft?.lines?.length ? (
@@ -360,7 +360,7 @@ export function WorkflowWorkspace() {
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">No draft — save lines from Retailer order creation first.</p>
+          <p className="text-sm text-muted-foreground">No draft — save lines from Order creation first.</p>
         )}
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1">

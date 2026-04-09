@@ -43,11 +43,15 @@ import {
 import { resolveVariantImageUrl } from "@/lib/variant-image"
 import { cn } from "@/lib/utils"
 import {
+  RiApps2Line,
+  RiArrowUpDownLine,
   RiBarChartGroupedLine,
   RiCloseLine,
   RiInformationLine,
   RiSearchLine,
+  RiShieldCheckLine,
   RiStackLine,
+  RiPulseLine,
 } from "@remixicon/react"
 
 /* ─── Chart config ─── */
@@ -86,6 +90,170 @@ const VERDICT_LABEL: Record<string, string> = {
   hold: "Hold",
   caution: "Caution",
   avoid: "Avoid",
+}
+
+function skuHash(s: string): number {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return Math.abs(h)
+}
+
+/** Random subset; reshuffles when `variants` identity/length changes. */
+function takeRandomSubset<T>(pool: T[], n: number): T[] {
+  if (pool.length <= n) return [...pool]
+  const copy = [...pool]
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[copy[i], copy[j]] = [copy[j]!, copy[i]!]
+  }
+  return copy.slice(0, n)
+}
+
+type ReturnRankRow = { inv: InventoryVariant; returnScore: number }
+
+function buildDemandSpotlight(variants: InventoryVariant[]): {
+  high: InventoryVariant[]
+  idle: InventoryVariant[]
+  returns: ReturnRankRow[]
+} {
+  if (!variants.length) return { high: [], idle: [], returns: [] }
+
+  const byTrend = [...variants].sort((a, b) => b.trendScore - a.trendScore)
+  const mid = Math.max(1, Math.ceil(byTrend.length / 2))
+  const highPool = byTrend
+    .slice(0, mid)
+    .filter((v) => v.trendScore >= 48)
+  const highSource = highPool.length ? highPool : byTrend.slice(0, Math.min(4, byTrend.length))
+
+  const idlePool = variants.filter(
+    (v) => v.trendScore < 52 || v.weeksCover >= 4 || (v.onHand >= 40 && v.reserved <= 2)
+  )
+  const idleSource =
+    idlePool.length > 0 ? idlePool : byTrend.slice(-Math.min(4, byTrend.length))
+
+  const rankedReturns: ReturnRankRow[] = variants.map((inv) => {
+    const hashPart = (skuHash(inv.sku) % 22) + (skuHash(inv.sku + "|r") % 14)
+    const coverDrag = Math.min(16, inv.weeksCover * 1.35)
+    const softDemand = inv.trendScore < 48 ? 10 : inv.trendScore < 58 ? 4 : 0
+    const bulkySlow =
+      inv.onHand > 50 && inv.weeksCover >= 3 && inv.trendScore < 62 ? 6 : 0
+    return {
+      inv,
+      returnScore: hashPart + coverDrag + softDemand + bulkySlow,
+    }
+  })
+  rankedReturns.sort((a, b) => b.returnScore - a.returnScore)
+  const returnPool = rankedReturns.slice(0, Math.min(12, rankedReturns.length))
+
+  return {
+    high: takeRandomSubset(highSource, 3),
+    idle: takeRandomSubset(idleSource, 3),
+    returns: takeRandomSubset(returnPool, 3),
+  }
+}
+
+type SpotlightProductRowProps = {
+  inv: InventoryVariant
+  metaLine: string
+  onPick: (inv: InventoryVariant) => void
+}
+
+function SpotlightProductRow({ inv, metaLine, onPick }: SpotlightProductRowProps) {
+  const sig = variantMarketSignal(inv)
+  return (
+    <button
+      type="button"
+      onClick={() => onPick(inv)}
+      className="flex w-full items-center gap-2 rounded-lg border border-border/50 bg-card/80 px-2 py-1.5 text-left transition-colors hover:border-primary/30 hover:bg-primary/5"
+    >
+      <img
+        src={resolveVariantImageUrl({
+          sku: inv.sku,
+          id: inv.id,
+          imageUrl: inv.imageUrl,
+        })}
+        alt=""
+        className="size-8 shrink-0 rounded-md object-cover"
+        loading="lazy"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[11px] font-medium leading-tight">{inv.productName}</p>
+        <p className="truncate font-mono text-[10px] text-muted-foreground">{inv.sku}</p>
+      </div>
+      <div className="shrink-0 text-right text-[10px] leading-tight tabular-nums">
+        <p className="font-semibold text-foreground">{metaLine}</p>
+        <p
+          className={cn(
+            "text-muted-foreground",
+            sig.momentumPct > 3 && "text-emerald-600 dark:text-emerald-400",
+            sig.momentumPct < -3 && "text-rose-600 dark:text-rose-400"
+          )}
+        >
+          {sig.momentumPct > 0 ? "+" : ""}
+          {sig.momentumPct}% mom.
+        </p>
+      </div>
+    </button>
+  )
+}
+
+type TopMetricCardProps = {
+  title: string
+  value: string
+  helper: string
+  tone?: "default" | "good" | "warn"
+  barPct?: number
+  icon: React.ReactNode
+}
+
+function TopMetricCard({
+  title,
+  value,
+  helper,
+  tone = "default",
+  barPct,
+  icon,
+}: TopMetricCardProps) {
+  return (
+    <Panel
+      className={cn(
+        "group relative overflow-hidden rounded-2xl border px-3 py-3.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg",
+        tone === "good" &&
+          "border-emerald-500/20 bg-linear-to-br from-emerald-500/10 via-background to-card",
+        tone === "warn" &&
+          "border-rose-500/20 bg-linear-to-br from-rose-500/10 via-background to-card",
+        tone === "default" &&
+          "border-border/60 bg-linear-to-br from-background via-card to-muted/25"
+      )}
+    >
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <p className="text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
+          {title}
+        </p>
+        <span className="inline-flex size-7 items-center justify-center rounded-full border border-border/60 bg-background/70 text-muted-foreground">
+          {icon}
+        </span>
+      </div>
+      <p className="text-2xl font-semibold tracking-tight tabular-nums">{value}</p>
+      {typeof barPct === "number" ? (
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted/70">
+          <div
+            className={cn(
+              "h-full rounded-full transition-all",
+              tone === "good" && "bg-emerald-500/80",
+              tone === "warn" && "bg-rose-500/80",
+              tone === "default" && "bg-primary/80"
+            )}
+            style={{ width: `${Math.max(3, Math.min(100, barPct))}%` }}
+          />
+        </div>
+      ) : null}
+      <p className="mt-1.5 text-[11px] text-muted-foreground">{helper}</p>
+    </Panel>
+  )
 }
 
 /* ─── AI Trend Result Type ─── */
@@ -200,6 +368,11 @@ export function PredictionWorkspace() {
     [variants]
   )
 
+  const demandSpotlight = React.useMemo(
+    () => buildDemandSpotlight(variants),
+    [variants]
+  )
+
   const marketSearchMatches = React.useMemo(() => {
     const q = marketQuery.trim()
     if (!q) return [] as InventoryVariant[]
@@ -265,6 +438,14 @@ export function PredictionWorkspace() {
     setMarketSearchHighlightIdx(-1)
     marketSearchInputRef.current?.blur()
   }, [])
+
+  const spotlightPick = React.useCallback(
+    (inv: InventoryVariant) => {
+      setSku(inv.sku)
+      pickVariantForMarket(inv)
+    },
+    [pickVariantForMarket]
+  )
 
   const pickExternalProductForMarket = React.useCallback(
     async (hit: ExternalProductHit) => {
@@ -454,18 +635,16 @@ export function PredictionWorkspace() {
 
   return (
     <div className="space-y-3 pb-8">
-      {/* Title + workflow */}
+      {/* Title + next step */}
       <div className="grid items-start gap-3 lg:grid-cols-12">
         <div className="lg:col-span-8">
-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
-            Trend Prediction
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Trends</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Dashboard view: data source, portfolio, search, market read, every
-            SKU, planner, AI, and chart.
+            Live or sample catalog: demand spotlight, search, market read, full SKU table,
+            planner, AI assist, and trend charts.
           </p>
         </div>
-        <Panel className="flex flex-wrap items-center gap-3 border-primary/25 bg-primary/5 p-3 text-sm lg:col-span-4 lg:justify-self-end">
+        {/* <Panel className="flex flex-wrap items-center gap-3 border-primary/25 bg-primary/5 p-3 text-sm lg:col-span-4 lg:justify-self-end">
           <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
             1
           </span>
@@ -474,14 +653,55 @@ export function PredictionWorkspace() {
             href="/pricing"
             className="font-semibold text-primary underline-offset-4 hover:underline"
           >
-            RSP Generator →
+            RSP →
           </Link>
-        </Panel>
+        </Panel> */}
       </div>
 
-      {/* Row: source | portfolio | search */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {overallMarket ? (
+          <>
+            <TopMetricCard
+              title="SKUs"
+              value={String(overallMarket.total)}
+              helper="Total active products in view"
+              icon={<RiApps2Line className="size-4" aria-hidden />}
+              barPct={Math.min(100, Math.max(10, overallMarket.total))}
+            />
+            <TopMetricCard
+              title="Avg Trend"
+              value={String(overallMarket.avgTrend)}
+              helper="Portfolio demand strength"
+              icon={<RiPulseLine className="size-4" aria-hidden />}
+              barPct={overallMarket.avgTrend}
+            />
+            <TopMetricCard
+              title="Momentum"
+              value={`${overallMarket.momentumPct > 0 ? "+" : ""}${overallMarket.momentumPct}%`}
+              helper="Week-over-week movement"
+              tone={overallMarket.momentumPct > 2 ? "good" : overallMarket.momentumPct < -2 ? "warn" : "default"}
+              icon={<RiArrowUpDownLine className="size-4" aria-hidden />}
+              barPct={Math.min(100, Math.abs(overallMarket.momentumPct) * 5)}
+            />
+            <TopMetricCard
+              title="Confidence"
+              value={`${overallMarket.confidence}%`}
+              helper={`${overallMarket.hotCount} hot · ${overallMarket.coolCount} soft`}
+              tone={overallMarket.confidence >= 70 ? "good" : "default"}
+              icon={<RiShieldCheckLine className="size-4" aria-hidden />}
+              barPct={overallMarket.confidence}
+            />
+          </>
+        ) : (
+          <Panel className="rounded-lg border border-border/50 bg-card px-3 py-2.5 text-sm text-muted-foreground sm:col-span-2 lg:col-span-4">
+            No products loaded.
+          </Panel>
+        )}
+      </div>
+
+      {/* Row: source | demand spotlight | search */}
       <div className="grid items-stretch gap-3 lg:grid-cols-12">
-        <Panel className="space-y-3 overflow-y-auto p-3 lg:col-span-3 lg:h-[360px]">
+        {/* <Panel className="space-y-3 overflow-y-auto p-3 lg:col-span-3 lg:h-[360px]">
           {odooUnavailable ? (
             <div
               className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/8 p-4 text-sm text-amber-950 sm:flex-row sm:items-start sm:justify-between dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-50/95"
@@ -570,78 +790,100 @@ export function PredictionWorkspace() {
               </Button>
             </div>
           </div>
-        </Panel>
+        </Panel> */}
 
         <Panel className="flex h-full flex-col overflow-hidden p-0 lg:col-span-5 lg:h-[360px]">
-          <div className="flex items-center gap-2 border-b border-border/50 bg-muted/25 px-4 py-2.5">
-            <RiBarChartGroupedLine
-              className="size-5 shrink-0 text-primary"
-              aria-hidden
-            />
-            <h2 className="text-sm font-semibold tracking-tight">
-              Portfolio snapshot
-            </h2>
+          <div className="flex flex-col gap-0.5 border-b border-border/50 bg-muted/25 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <RiBarChartGroupedLine
+                className="size-5 shrink-0 text-primary"
+                aria-hidden
+              />
+              <h2 className="text-sm font-semibold tracking-tight">
+                Demand spotlight
+              </h2>
+            </div>
+            {/* <p className="text-[10px] leading-snug text-muted-foreground sm:max-w-[55%] sm:text-right">
+              Random picks from your catalog: hot SKUs, slow movers, and
+              highest modeled return pressure (not live returns data).
+            </p> */}
           </div>
-          <div className="flex-1 p-3">
-            {overallMarket ? (
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-lg border border-border/50 bg-card px-3 py-2.5 shadow-sm">
-                  <p className="text-[11px] font-medium text-muted-foreground">
-                    SKUs
-                  </p>
-                  <p className="mt-0.5 text-xl font-semibold tabular-nums">
-                    {overallMarket.total}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border/50 bg-card px-3 py-2.5 shadow-sm">
-                  <p className="text-[11px] font-medium text-muted-foreground">
-                    Avg trend
-                  </p>
-                  <p className="mt-0.5 text-xl font-semibold tabular-nums">
-                    {overallMarket.avgTrend}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border/50 bg-card px-3 py-2.5 shadow-sm">
-                  <p className="text-[11px] font-medium text-muted-foreground">
-                    Momentum
-                  </p>
-                  <p
-                    className={cn(
-                      "mt-0.5 text-xl font-semibold tabular-nums",
-                      overallMarket.momentumPct > 5 &&
-                        "text-emerald-600 dark:text-emerald-400",
-                      overallMarket.momentumPct < -5 &&
-                        "text-rose-600 dark:text-rose-400"
-                    )}
-                  >
-                    {overallMarket.momentumPct > 0 ? "+" : ""}
-                    {overallMarket.momentumPct}%
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border/50 bg-card px-3 py-2.5 shadow-sm">
-                  <p className="text-[11px] font-medium text-muted-foreground">
-                    Confidence
-                  </p>
-                  <p className="mt-0.5 text-xl font-semibold tabular-nums">
-                    {overallMarket.confidence}%
-                  </p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">
-                    {overallMarket.hotCount} hot · {overallMarket.coolCount}{" "}
-                    soft
-                  </p>
-                </div>
-              </div>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+            {variants.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No products loaded.</p>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                No products loaded.
-              </p>
+              <>
+                <div>
+                  <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-emerald-700 uppercase dark:text-emerald-400">
+                    High demand
+                  </p>
+                  <div className="space-y-1">
+                    {demandSpotlight.high.length ? (
+                      demandSpotlight.high.map((inv) => (
+                        <SpotlightProductRow
+                          key={`h-${inv.id}`}
+                          inv={inv}
+                          metaLine={`Trend ${inv.trendScore}`}
+                          onPick={spotlightPick}
+                        />
+                      ))
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        No strong-demand SKUs in this slice.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-slate-600 uppercase dark:text-slate-400">
+                    Low demand / idle
+                  </p>
+                  <div className="space-y-1">
+                    {demandSpotlight.idle.length ? (
+                      demandSpotlight.idle.map((inv) => (
+                        <SpotlightProductRow
+                          key={`i-${inv.id}`}
+                          inv={inv}
+                          metaLine={`${inv.weeksCover}w cover · trend ${inv.trendScore}`}
+                          onPick={spotlightPick}
+                        />
+                      ))
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        No idle SKUs matched filters.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-rose-700 uppercase dark:text-rose-400">
+                    Highest returns (modeled)
+                  </p>
+                  <div className="space-y-1">
+                    {demandSpotlight.returns.length ? (
+                      demandSpotlight.returns.map(({ inv, returnScore }) => (
+                        <SpotlightProductRow
+                          key={`r-${inv.id}`}
+                          inv={inv}
+                          metaLine={`Score ${Math.round(returnScore)}`}
+                          onPick={spotlightPick}
+                        />
+                      ))
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        No rows to rank.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </Panel>
 
         <Panel
           className={cn(
-            "relative z-30 flex min-h-[360px] flex-col overflow-hidden p-0 lg:col-span-4 lg:h-[360px]",
+            "relative z-30 flex min-h-[360px] flex-col overflow-hidden p-0 lg:col-span-7 lg:h-[360px]",
             marketResult && "ring-1 ring-primary/15"
           )}
         >
@@ -768,7 +1010,7 @@ export function PredictionWorkspace() {
                         disabled={marketLoading}
                         onClick={() => void runMarketSearch()}
                       >
-                        {marketLoading ? "Working…" : "Analyze"}
+                        {marketLoading ? "Working…" : "AI Analyzer"}
                       </Button>
                     </div>
                   </div>
@@ -1170,7 +1412,7 @@ export function PredictionWorkspace() {
         </Panel>
       </div>
 
-      <Panel className="relative max-h-[min(260px,34vh)] space-y-3 overflow-y-auto border-primary/20 bg-linear-to-br from-violet-500/10 via-primary/5 to-cyan-500/10 p-4">
+      {/* <Panel className="relative max-h-[min(260px,34vh)] space-y-3 overflow-y-auto border-primary/20 bg-linear-to-br from-violet-500/10 via-primary/5 to-cyan-500/10 p-4">
         {aiLoading ? (
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
             <div className="absolute -inset-x-1/2 top-0 h-24 -translate-x-1/2 bg-linear-to-r from-transparent via-white/30 to-transparent blur-xl animate-pulse dark:via-white/10" />
@@ -1263,7 +1505,7 @@ export function PredictionWorkspace() {
             )}
           </div>
         )}
-      </Panel>
+      </Panel> */}
 
       <div
         id="product-planner"
@@ -1709,11 +1951,11 @@ export function PredictionWorkspace() {
         <div>
           <p className="text-sm font-medium">Ready to set the price?</p>
           <p className="text-xs text-muted-foreground">
-            Move to the AI-powered RSP Generator for pricing strategies.
+            Open RSP to turn cost and demand into shelf scenarios and margins.
           </p>
         </div>
         <Button type="button" size="sm" asChild>
-          <Link href="/pricing">Generate RSP →</Link>
+          <Link href="/pricing">RSP →</Link>
         </Button>
       </Panel>
     </div>

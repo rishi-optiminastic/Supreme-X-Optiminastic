@@ -1,6 +1,5 @@
 import Link from "next/link"
 import {
-  RiGuideLine,
   RiLineChartLine,
   RiPriceTag3Line,
   RiShoppingCart2Line,
@@ -12,18 +11,9 @@ import { Panel } from "@/components/panel"
 
 const tools = [
   {
-    href: "/workflow",
-    title: "Workflow",
-    body: "End-to-end execution flow: retailer order creation, Odoo purchase/sales steps, then verify stock availability before committing.",
-    Icon: RiGuideLine,
-    accent: "text-primary",
-    bg: "bg-primary/10",
-    step: null,
-  },
-  {
     href: "/prediction",
-    title: "Trend Prediction",
-    body: "AI-powered demand analysis. Is this product worth buying? Get a demand score, supplier negotiation tips, and market signals.",
+    title: "Trends",
+    body: "Demand spotlight across the catalog: trend scores, weeks of cover, market read, per-SKU planner, AI negotiation hints, and charts.",
     Icon: RiLineChartLine,
     accent: "text-sky-600 dark:text-sky-400",
     bg: "bg-sky-500/10",
@@ -31,8 +21,8 @@ const tools = [
   },
   {
     href: "/pricing",
-    title: "RSP Generator",
-    body: "AI pricing strategies: Penetration, Competitive, Premium. Enter your cost → get a shelf price with margin analysis and reasoning.",
+    title: "RSP",
+    body: "Shelf pricing from landed cost: penetration, competitive, and premium scenarios with margin breakdown and reasoning.",
     Icon: RiPriceTag3Line,
     accent: "text-violet-600 dark:text-violet-400",
     bg: "bg-violet-500/10",
@@ -40,8 +30,8 @@ const tools = [
   },
   {
     href: "/purchase",
-    title: "Retailer order creation",
-    body: "Store each retailer’s order template, add products with rate and quantity, then mail or download the filled order form. Save lines for Odoo when needed.",
+    title: "Order creation",
+    body: "Per-retailer templates, line items with rate and quantity, then mail or download the filled Excel/PDF. Inline stock check against your lines.",
     Icon: RiShoppingCart2Line,
     accent: "text-emerald-600 dark:text-emerald-400",
     bg: "bg-emerald-500/10",
@@ -49,12 +39,12 @@ const tools = [
   },
   {
     href: "/stock-health",
-    title: "Stock Health",
-    body: "Every SKU labelled: running low, selling well, overstocked, dead stock. Filter, sort, estimate tied-up capital, export CSV.",
+    title: "Inventory",
+    body: "Health segments per SKU, tied-up capital hints, table export—and a PO Excel upload to match lines to the catalog and sellable stock.",
     Icon: RiStackLine,
     accent: "text-amber-600 dark:text-amber-400",
     bg: "bg-amber-500/10",
-    step: null,
+    step: 4,
   },
   {
     href: "/conversion",
@@ -76,26 +66,25 @@ export default function HomePage() {
           Smarter buying decisions for your Odoo inventory
         </h1>
         <p className="text-base leading-relaxed text-muted-foreground">
-          Connect your Odoo account and run one clean process: create retailer orders from saved templates,
-          push lines through purchase and sales in Odoo when needed, and verify whether requested quantities are available in inventory.
+          Connect Odoo for a live catalog, then move through the sidebar tools: size demand and trends, set RSP from cost,
+          build retailer order files, and double-check sellable stock—including by uploading a PO spreadsheet.
         </p>
       </div>
 
       {/* Pipeline overview */}
       <Panel className="flex flex-wrap items-center gap-2 px-4 py-3">
-        <span className="text-xs font-medium text-muted-foreground">Pipeline:</span>
+        <span className="text-xs font-medium text-muted-foreground">Typical flow:</span>
         {[
-          "Trend Prediction",
-          "RSP Generator",
-          "Retailer order creation",
-          "Convert PO to SO",
-          "Verify Inventory Stock",
-          "Finalize Action",
+          "Trends",
+          "RSP",
+          "Order creation",
+          "Inventory",
+          "Sales ideas",
         ].map((label, i) => (
           <span key={label} className="flex items-center gap-1.5 text-xs">
             <span className="flex size-5 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">{i + 1}</span>
             <span className="text-muted-foreground">{label}</span>
-            {i < 5 && <span className="mx-0.5 text-border">→</span>}
+            {i < 4 && <span className="mx-0.5 text-border">→</span>}
           </span>
         ))}
       </Panel>
