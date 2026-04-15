@@ -1,16 +1,18 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
 import {
+  RiAddLine,
+  RiArrowDownSLine,
+  RiCloseLine,
   RiDownloadLine,
-  RiInformationLine,
+  RiLoader4Line,
   RiMailLine,
   RiPrinterLine,
-  RiShoppingCart2Line,
   RiStore2Line,
   RiUploadCloud2Line,
 } from "@remixicon/react"
+import { Dialog } from "radix-ui"
 
 import { Panel } from "@/components/panel"
 import { Button } from "@/components/ui/button"
@@ -32,6 +34,7 @@ import {
   storedTemplateToBlob,
   validateTemplateFile,
   type RetailerOrderProfile,
+  type StoredTemplateFile,
 } from "@/lib/retailer-order-templates"
 import { evaluateStockForLines, type SalesOrderLine } from "@/lib/stock-confirmation"
 import { cn } from "@/lib/utils"
@@ -50,6 +53,37 @@ const DEFAULT_META = {
   currency: "AED",
   payment: "90 days from document date",
   deliverTo: "As per retailer agreement",
+}
+
+/** Built-in workbook used when a retailer has no custom template (see Add retailer → default master). */
+const DEFAULT_MASTER_SHEET_URL = "/Order%20Form.xlsx"
+const DEFAULT_MASTER_SHEET_NAME = "Order Form.xlsx"
+
+async function loadTemplateBufferForRetailer(
+  retailer: RetailerOrderProfile | null
+): Promise<{ buf: ArrayBuffer; fileName: string; mimeType: string } | null> {
+  if (!retailer) return null
+  if (retailer.template) {
+    const blob = storedTemplateToBlob(retailer.template)
+    return {
+      buf: await blob.arrayBuffer(),
+      fileName: retailer.template.fileName,
+      mimeType: retailer.template.mimeType,
+    }
+  }
+  if (retailer.useDefaultMasterSheet) {
+    const res = await fetch(DEFAULT_MASTER_SHEET_URL)
+    if (!res.ok) return null
+    const buf = await res.arrayBuffer()
+    return {
+      buf,
+      fileName: DEFAULT_MASTER_SHEET_NAME,
+      mimeType:
+        res.headers.get("content-type") ||
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }
+  }
+  return null
 }
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
@@ -125,7 +159,22 @@ const Purchase = () => {
   const [selectedRetailerId, setSelectedRetailerId] = React.useState<string | null>(null)
   const [templateHint, setTemplateHint] = React.useState<string | null>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
-  const newRetailerInputRef = React.useRef<HTMLInputElement>(null)
+  const addRetailerTemplateInputRef = React.useRef<HTMLInputElement>(null)
+
+  const [addRetailerOpen, setAddRetailerOpen] = React.useState(false)
+  const [newRetailerName, setNewRetailerName] = React.useState("")
+  const [addRetailerUseDefault, setAddRetailerUseDefault] = React.useState(false)
+  const [addRetailerTemplateFile, setAddRetailerTemplateFile] = React.useState<File | null>(null)
+  const [dialogTemplateDrag, setDialogTemplateDrag] = React.useState(false)
+  const [addRetailerBusy, setAddRetailerBusy] = React.useState(false)
+
+  const resetAddRetailerForm = React.useCallback(() => {
+    setNewRetailerName("")
+    setAddRetailerUseDefault(false)
+    setAddRetailerTemplateFile(null)
+    setDialogTemplateDrag(false)
+    if (addRetailerTemplateInputRef.current) addRetailerTemplateInputRef.current.value = ""
+  }, [])
 
   React.useLayoutEffect(() => {
     const s = loadRetailerTemplatesState()
@@ -145,6 +194,7 @@ const Purchase = () => {
   }, [])
 
   const selectedRetailer = retailers.find((r) => r.id === selectedRetailerId) ?? null
+  const hasTemplateForOutput = Boolean(selectedRetailer?.template || selectedRetailer?.useDefaultMasterSheet)
 
   const [orderRef, setOrderRef] = React.useState(`ORD-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`)
   const [orderDate, setOrderDate] = React.useState(new Date().toISOString().slice(0, 10))
@@ -173,52 +223,105 @@ const Purchase = () => {
     }
   }, [sku, variants])
 
-  const addRetailer = React.useCallback(() => {
-    const name = (newRetailerInputRef.current?.value ?? "").trim()
+  const submitAddRetailer = React.useCallback(async () => {
+    const name = newRetailerName.trim()
     if (!name) {
       setTemplateHint("Enter a retailer name.")
       setTimeout(() => setTemplateHint(null), 4000)
       return
     }
-    let id: string
-    try {
-      id = newRetailerId()
-    } catch {
-      id = `r-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
+    if (!addRetailerUseDefault && !addRetailerTemplateFile) {
+      setTemplateHint("Upload an order creation template or turn on “Use default master sheet”.")
+      setTimeout(() => setTemplateHint(null), 6000)
+      return
     }
-    let storedList: RetailerOrderProfile[]
+
+    setAddRetailerBusy(true)
     try {
-      const s = loadRetailerTemplatesState()
-      storedList = Array.isArray(s.retailers) ? s.retailers : []
+      let template: StoredTemplateFile | null = null
+      let useDefaultMasterSheet: boolean | undefined
+      if (addRetailerUseDefault) {
+        useDefaultMasterSheet = true
+      } else if (addRetailerTemplateFile) {
+        const err = validateTemplateFile(addRetailerTemplateFile)
+        if (err) {
+          setTemplateHint(err)
+          setTimeout(() => setTemplateHint(null), 8000)
+          return
+        }
+        template = await fileToStoredTemplate(addRetailerTemplateFile)
+      }
+
+      let id: string
+      try {
+        id = newRetailerId()
+      } catch {
+        id = `r-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
+      }
+      let storedList: RetailerOrderProfile[]
+      try {
+        const s = loadRetailerTemplatesState()
+        storedList = Array.isArray(s.retailers) ? s.retailers : []
+      } catch {
+        setTemplateHint("Could not read browser storage. Allow storage for this site or disable private mode.")
+        setTimeout(() => setTemplateHint(null), 8000)
+        return
+      }
+      const profile: RetailerOrderProfile = {
+        id,
+        name,
+        createdAtIso: new Date().toISOString(),
+        template,
+        useDefaultMasterSheet: template ? undefined : useDefaultMasterSheet,
+      }
+      const byId = new Map<string, RetailerOrderProfile>()
+      for (const r of storedList) {
+        if (r && typeof r.id === "string") byId.set(r.id, r)
+      }
+      for (const r of retailers) {
+        if (r && typeof r.id === "string") byId.set(r.id, r)
+      }
+      const next = [...Array.from(byId.values()), profile]
+      const ok = persistRetailers(next, id)
+      if (!ok) {
+        setTemplateHint("Could not save to browser storage (quota full or private mode).")
+        setTimeout(() => setTemplateHint(null), 8000)
+        return
+      }
+      resetAddRetailerForm()
+      setAddRetailerOpen(false)
+      setTemplateHint(
+        profile.useDefaultMasterSheet
+          ? `Added retailer “${name}” using the default master sheet.`
+          : `Added retailer “${name}” with their order template.`
+      )
+      setTimeout(() => setTemplateHint(null), 5000)
     } catch {
-      setTemplateHint("Could not read browser storage. Allow storage for this site or disable private mode.")
+      setTemplateHint("Could not read that template file.")
+      setTimeout(() => setTemplateHint(null), 5000)
+    } finally {
+      setAddRetailerBusy(false)
+    }
+  }, [
+    addRetailerTemplateFile,
+    addRetailerUseDefault,
+    newRetailerName,
+    persistRetailers,
+    retailers,
+    resetAddRetailerForm,
+  ])
+
+  const ingestAddRetailerTemplateFile = React.useCallback((file: File | null) => {
+    if (!file) return
+    setAddRetailerUseDefault(false)
+    const err = validateTemplateFile(file)
+    if (err) {
+      setTemplateHint(err)
       setTimeout(() => setTemplateHint(null), 8000)
       return
     }
-    const profile: RetailerOrderProfile = {
-      id,
-      name,
-      createdAtIso: new Date().toISOString(),
-      template: null,
-    }
-    const byId = new Map<string, RetailerOrderProfile>()
-    for (const r of storedList) {
-      if (r && typeof r.id === "string") byId.set(r.id, r)
-    }
-    for (const r of retailers) {
-      if (r && typeof r.id === "string") byId.set(r.id, r)
-    }
-    const next = [...Array.from(byId.values()), profile]
-    const ok = persistRetailers(next, id)
-    if (!ok) {
-      setTemplateHint("Could not save to browser storage (quota full or private mode).")
-      setTimeout(() => setTemplateHint(null), 8000)
-      return
-    }
-    if (newRetailerInputRef.current) newRetailerInputRef.current.value = ""
-    setTemplateHint(`Added retailer “${name}”. Upload their order template when ready.`)
-    setTimeout(() => setTemplateHint(null), 5000)
-  }, [retailers, persistRetailers])
+    setAddRetailerTemplateFile(file)
+  }, [])
 
   const removeRetailer = (id: string) => {
     const base = retailers.length > 0 ? retailers : loadRetailerTemplatesState().retailers
@@ -244,7 +347,9 @@ const Purchase = () => {
     try {
       const template = await fileToStoredTemplate(file)
       const base = retailers.length > 0 ? retailers : loadRetailerTemplatesState().retailers
-      const next = base.map((r) => (r.id === selectedRetailerId ? { ...r, template } : r))
+      const next = base.map((r) =>
+        r.id === selectedRetailerId ? { ...r, template, useDefaultMasterSheet: undefined } : r
+      )
       const ok = persistRetailers(next, selectedRetailerId)
       if (!ok) {
         setTemplateHint("Could not save to browser storage (quota full or private mode).")
@@ -396,9 +501,9 @@ const Purchase = () => {
   }
 
   const downloadFilledFromTemplate = async () => {
-    const t = selectedRetailer?.template
-    if (!t) {
-      setDraftHint("Upload this retailer’s order template (.xlsx, .xls, .csv, or fillable PDF) first.")
+    const loaded = await loadTemplateBufferForRetailer(selectedRetailer)
+    if (!loaded) {
+      setDraftHint("Upload this retailer’s order template or enable the default master sheet when adding the retailer.")
       setTimeout(() => setDraftHint(null), 6000)
       return
     }
@@ -409,8 +514,8 @@ const Purchase = () => {
     }
     setOutputBusy(true)
     try {
-      const buf = await storedTemplateToBlob(t).arrayBuffer()
-      const res = await fillUploadedOrderTemplate(buf, t.fileName, t.mimeType, getFillInput())
+      const { buf, fileName, mimeType } = loaded
+      const res = await fillUploadedOrderTemplate(buf, fileName, mimeType, getFillInput())
       if (!res.ok) {
         setDraftHint(res.error)
         setTimeout(() => setDraftHint(null), 10_000)
@@ -430,8 +535,8 @@ const Purchase = () => {
   }
 
   const printOrSaveFilledPdf = async () => {
-    const t = selectedRetailer?.template
-    if (!t) {
+    const loaded = await loadTemplateBufferForRetailer(selectedRetailer)
+    if (!loaded) {
       setDraftHint("Upload a fillable PDF template to print, or download the Excel version and print from there.")
       setTimeout(() => setDraftHint(null), 8000)
       return
@@ -441,7 +546,8 @@ const Purchase = () => {
       setTimeout(() => setDraftHint(null), 4000)
       return
     }
-    const isPdf = t.fileName.toLowerCase().endsWith(".pdf") || t.mimeType.includes("pdf")
+    const { buf, fileName, mimeType } = loaded
+    const isPdf = fileName.toLowerCase().endsWith(".pdf") || mimeType.includes("pdf")
     if (!isPdf) {
       await downloadFilledFromTemplate()
       setDraftHint("Downloaded filled spreadsheet — open it in Excel (or similar) and use Print or Save as PDF.")
@@ -450,8 +556,7 @@ const Purchase = () => {
     }
     setOutputBusy(true)
     try {
-      const buf = await storedTemplateToBlob(t).arrayBuffer()
-      const res = await fillUploadedOrderTemplate(buf, t.fileName, t.mimeType, getFillInput())
+      const res = await fillUploadedOrderTemplate(buf, fileName, mimeType, getFillInput())
       if (!res.ok) {
         setDraftHint(res.error)
         setTimeout(() => setDraftHint(null), 10_000)
@@ -563,6 +668,7 @@ const Purchase = () => {
   const [soPartnerId, setSoPartnerId] = React.useState("")
   const [soResult, setSoResult] = React.useState<string | null>(null)
   const [soLoading, setSoLoading] = React.useState(false)
+  const [orderHeaderOpen, setOrderHeaderOpen] = React.useState(false)
 
   const createSoInOdoo = async () => {
     setSoResult(null)
@@ -606,7 +712,6 @@ const Purchase = () => {
       setSoLoading(false)
     }
   }
-
   const canMail = Boolean(selectedRetailerId) && lines.length > 0
 
   const bannerMessages = [odooError, templateHint, draftHint].filter(Boolean) as string[]
@@ -614,546 +719,589 @@ const Purchase = () => {
   const odooUnavailable = dataIsSample && Boolean(odooError)
 
   return (
-    <div className="space-y-3 pb-8">
-      <div className="grid items-start gap-3 lg:grid-cols-12">
-        <div className="flex items-start gap-3 lg:col-span-8">
-          {/* <div className="mt-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-            <RiShoppingCart2Line className="size-6 text-primary" aria-hidden />
-          </div> */}
-          <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Order creation</h1>
-            {/* <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-              Upload each retailer&apos;s template once. Downloaded <span className="font-medium text-foreground">.xlsx</span>{" "}
-              files keep the original workbook design (colors, fonts, formulas). You can use{" "}
-              <span className="font-medium text-foreground">{"{{placeholders}}"}</span> in cells, or common layouts like the
-              Vertex42-style order form are filled automatically. PDFs need fillable text fields (see left panel).
-            </p> */}
-          </div>
+    <div className="">
+
+      {/* ── Page header ── */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Order creation</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Build an order, fill the retailer&apos;s template, and download or print.
+          </p>
         </div>
-        {/* <Panel className="flex flex-wrap items-center gap-3 border-primary/25 bg-primary/5 p-3 text-sm lg:col-span-4 lg:justify-self-end">
-          <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-            3
-          </span>
-          <span className="text-muted-foreground">Next:</span>
-          <Link href="/stock-health" className="font-semibold text-primary underline-offset-4 hover:underline">
-            Inventory →
-          </Link>
-        </Panel> */}
+        <Button
+          type="button"
+          size="sm"
+          variant="default"
+          className="h-9 shrink-0 gap-1.5 shadow-sm"
+          onClick={() => setAddRetailerOpen(true)}
+        >
+          <RiAddLine className="size-4" aria-hidden />
+          Add retailer
+        </Button>
       </div>
 
-      {/* {bannerMessages.length > 0 ? (
+      {/* ── Banner messages ── */}
+      {/* {bannerMessages.length > 0 && (
         <div
           className={cn(
-            "rounded-lg border px-3 py-2 text-sm",
+            "rounded-lg border px-3 py-2.5 text-sm",
             odooError
               ? "border-destructive/40 bg-destructive/5 text-destructive"
               : "border-border/60 bg-muted/30 text-muted-foreground"
           )}
         >
           {bannerMessages.map((m, i) => (
-            <p key={i} className={i > 0 ? "mt-1 border-t border-border/40 pt-1" : undefined}>
-              {m}
-            </p>
+            <p key={i} className={i > 0 ? "mt-1 border-t border-border/40 pt-1" : undefined}>{m}</p>
           ))}
         </div>
-      ) : null} */}
+      )} */}
 
-      <div className="grid items-stretch gap-3 lg:grid-cols-12">
-        <Panel className="space-y-3 overflow-y-auto border-border/60 bg-card/95 p-3 lg:col-span-3 lg:max-h-[min(88vh,960px)] lg:overflow-y-auto">
-          {odooUnavailable ? (
-            <div className="flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/8 p-3 text-sm text-amber-950 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-50/95">
-              <RiInformationLine className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
-              <div className="min-w-0">
-                <p className="font-medium">Live catalog unavailable</p>
-                <p className="mt-1 text-xs leading-relaxed opacity-90">Using sample inventory for product pickers.</p>
-              </div>
-            </div>
-          ) : null}
-          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-            <span
-              className={cn(
-                "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium",
-                source === "odoo"
-                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
-                  : "border-border/60 bg-muted/40 text-muted-foreground"
-              )}
-            >
-              {source === "odoo" ? "Live · Odoo" : "Sample data"}
-            </span>
-            <span className="text-xs text-muted-foreground">{variants.length} products</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" size="sm" className="w-fit" onClick={() => refetchOdoo()}>
-              Refresh data
-            </Button>
-            {odooLoading ? <span className="text-xs text-muted-foreground">Loading catalog…</span> : null}
-          </div>
+      {/* ── Main 2-column layout ── */}
+      <div className="grid items-start gap-4 lg:grid-cols-12">
 
-          <div className="rounded-xl border border-border/60 bg-muted/20 p-3 shadow-sm">
-            <p className="text-xs font-semibold tracking-tight text-foreground">Excel / CSV / Google Sheets</p>
-            <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-              Put tokens in cells (exact text). We replace them when you download. Branded templates without tokens still
-              export with full styling — line tables are detected by column headers (QTY, DESCRIPTION, UNIT PRICE, etc.).
-            </p>
-            <p className="mt-2 break-all font-mono text-[10px] leading-relaxed text-muted-foreground">
-              {"{{ORDER_REF}} {{ORDER_DATE}} {{DELIVERY_DATE}} {{RETAILER_NAME}} {{RETAILER_CODE}} {{DELIVER_TO}} {{CURRENCY}} {{PAYMENT_TERMS}} {{NOTES}} {{LINE_ITEMS}} {{NET_TOTAL}} {{GROSS_TOTAL}} {{AFTER_DISCOUNT_TOTAL}} {{VAT_TOTAL}} {{QTY_TOTAL}}"}
-            </p>
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              Lines:{" "}
-              <span className="font-mono text-[10px]">
-                {"{{LINE_1_SKU}} {{LINE_1_NAME}} {{LINE_1_QTY}} {{LINE_1_RATE}} {{LINE_1_DISC}} {{LINE_1_VAT}} {{LINE_1_VALUE}}"}
-              </span>{" "}
-              … up to <span className="font-mono text-[10px]">{"{{LINE_50_*}}"}</span>.
-            </p>
-          </div>
+        {/* ─── Left: retailer + header + lines ─── */}
+        <div className="space-y-4 lg:col-span-9">
+          <Panel className="divide-y divide-border/60 overflow-hidden p-0 shadow-md ring-1 ring-black/5 dark:ring-white/5">
 
-          <div className="rounded-xl border border-border/60 bg-muted/20 p-3 shadow-sm">
-            <p className="text-xs font-semibold tracking-tight text-foreground">Fillable PDF</p>
-            <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-              AcroForm <span className="font-medium text-foreground">text</span> fields are filled by name, e.g.{" "}
-              <span className="font-mono text-[10px]">order_ref</span>,{" "}
-              <span className="font-mono text-[10px]">retailer_name</span>,{" "}
-              <span className="font-mono text-[10px]">line_items</span>,{" "}
-              <span className="font-mono text-[10px]">net_total</span>,{" "}
-              <span className="font-mono text-[10px]">delivery_date</span>. Flat PDFs without fields cannot be filled
-              automatically.
-            </p>
-          </div>
-        </Panel>
-
-        <div className="space-y-3 lg:col-span-6">
-        <Panel className="divide-y divide-border/60 overflow-hidden p-0">
-          {/* Retailer */}
-          <section className="space-y-4 p-4 sm:p-5">
-            <div className="flex flex-wrap items-center gap-2">
-              <RiStore2Line className="size-4 text-primary" aria-hidden />
-              <SectionTitle>Who is this order for?</SectionTitle>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <FieldLabel>Retailer</FieldLabel>
-                <div className="flex flex-wrap gap-2">
-                  <select
-                    className="h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm shadow-sm"
-                    value={selectedRetailerId ?? ""}
-                    onChange={(e) => {
-                      const id = e.target.value || null
-                      const base = retailers.length > 0 ? retailers : loadRetailerTemplatesState().retailers
-                      const ok = persistRetailers(base, id)
-                      if (!ok) {
-                        setTemplateHint("Could not save to browser storage (quota full or private mode).")
-                        setTimeout(() => setTemplateHint(null), 8000)
-                      }
-                    }}
-                  >
-                    <option value="">Select…</option>
-                    {retailers.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name}
-                        {r.template ? " · template saved" : ""}
-                      </option>
-                    ))}
-                  </select>
-                  {selectedRetailerId ? (
-                    <Button type="button" variant="outline" size="sm" onClick={() => removeRetailer(selectedRetailerId)}>
-                      Remove
-                    </Button>
-                  ) : null}
+            {/* ── Retailer section ── */}
+            <section className="p-0">
+              <div className="flex items-center gap-3 border-b border-border/50 bg-gradient-to-r from-primary/8 via-primary/4 to-transparent px-5 py-3.5">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                  <RiStore2Line className="size-4" aria-hidden />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <SectionTitle>Retailer</SectionTitle>
+                  <p className="text-[11px] text-muted-foreground">Select retailer &amp; manage their order template</p>
                 </div>
-              </div>
-              <div>
-                <FieldLabel htmlFor="purchase-new-retailer-name">New retailer</FieldLabel>
-                <div className="flex gap-2">
-                  <Input
-                    ref={newRetailerInputRef}
-                    id="purchase-new-retailer-name"
-                    autoComplete="off"
-                    placeholder="Name"
-                    className="h-10"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault()
-                        addRetailer()
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-transparent bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm outline-none transition-colors hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring/50"
-                    onClick={addRetailer}
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="rounded-xl border border-dashed border-border/80 bg-muted/15 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-medium">Their blank order file</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">PDF, Excel, or similar — kept per retailer on this browser.</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    className="hidden"
-                    accept=".xlsx,.xls,.pdf,.csv,.doc,.docx,application/*"
-                    onChange={(e) => void onTemplateFile(e)}
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    className="gap-1.5"
-                    disabled={!selectedRetailerId}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <RiUploadCloud2Line className="size-4" aria-hidden />
-                    Upload
-                  </Button>
-                  {selectedRetailer?.template ? (
-                    <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={downloadStoredTemplate}>
-                      <RiDownloadLine className="size-4" aria-hidden />
-                      Original file
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-              {selectedRetailer?.template ? (
-                <p className="mt-3 font-mono text-xs text-muted-foreground">{selectedRetailer.template.fileName}</p>
-              ) : selectedRetailerId ? (
-                <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">Optional but recommended: upload their standard order form.</p>
-              ) : (
-                <p className="mt-3 text-xs text-muted-foreground">Pick a retailer above to upload a file.</p>
-              )}
-            </div>
-          </section>
-
-          {/* Order meta */}
-          <section className="space-y-4 p-4 sm:p-5">
-            <SectionTitle>Order header</SectionTitle>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div>
-                <FieldLabel>Reference</FieldLabel>
-                <Input className="h-10" value={orderRef} onChange={(e) => setOrderRef(e.target.value)} />
-              </div>
-              <div>
-                <FieldLabel>Order date</FieldLabel>
-                <Input className="h-10" type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} />
-              </div>
-              <div>
-                <FieldLabel>Delivery date</FieldLabel>
-                <Input className="h-10" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
-              </div>
-              <div>
-                <FieldLabel>Retailer code</FieldLabel>
-                <Input className="h-10" value={retailerCode} onChange={(e) => setRetailerCode(e.target.value)} placeholder="Optional" />
-              </div>
-            </div>
-            <div className="grid gap-3 lg:grid-cols-2">
-              <div>
-                <FieldLabel>Deliver to</FieldLabel>
-                <Input className="h-10" value={deliverTo} onChange={(e) => setDeliverTo(e.target.value)} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <FieldLabel>Currency</FieldLabel>
-                  <Input className="h-10" value={currency} onChange={(e) => setCurrency(e.target.value)} />
-                </div>
-                <div>
-                  <FieldLabel>Payment</FieldLabel>
-                  <Input className="h-10" value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} />
-                </div>
-              </div>
-            </div>
-            <div>
-              <FieldLabel>Notes on printed form</FieldLabel>
-              <Input className="h-10" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" />
-            </div>
-          </section>
-
-          {/* Lines */}
-          <section className="space-y-4 p-4 sm:p-5">
-            <SectionTitle>Line items</SectionTitle>
-            <div className="rounded-xl border border-border/60 bg-muted/10 p-3 sm:p-4">
-              <p className="mb-3 text-xs text-muted-foreground">Add one row at a time to the table below.</p>
-              <div className="grid gap-3 md:grid-cols-12 md:items-end">
-                <div className="md:col-span-4">
-                  <FieldLabel>Product</FieldLabel>
-                  <select
-                    className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm"
-                    value={sku}
-                    onChange={(e) => setSku(e.target.value)}
-                  >
-                    {variants.map((v) => (
-                      <option key={v.id} value={v.sku}>
-                        {v.sku} — {v.productName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="md:col-span-2">
-                  <FieldLabel>Qty</FieldLabel>
-                  <Input className="h-10" type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value) || 1)} />
-                </div>
-                <div className="md:col-span-2">
-                  <FieldLabel>Rate</FieldLabel>
-                  <Input
-                    className="h-10"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={unitPrice}
-                    onChange={(e) => setUnitPrice(Number(e.target.value) || 0)}
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <FieldLabel>Disc %</FieldLabel>
-                  <Input
-                    className="h-10"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={discountPct}
-                    onChange={(e) => setDiscountPct(Number(e.target.value) || 0)}
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <FieldLabel>VAT %</FieldLabel>
-                  <Input
-                    className="h-10"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={vatPct}
-                    onChange={(e) => setVatPct(Number(e.target.value) || 0)}
-                  />
-                </div>
-                <div className="md:col-span-12">
-                  <Button type="button" size="sm" className="mt-1" onClick={addLine}>
-                    Add to order
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto rounded-xl border border-border/60">
-              <table className="w-full min-w-[720px] text-sm">
-                <thead>
-                  <tr className="border-b border-border/60 bg-muted/40 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    <th className="px-3 py-2.5">#</th>
-                    <th className="px-3 py-2.5">Product</th>
-                    <th className="px-3 py-2.5 text-right">Qty</th>
-                    <th className="px-3 py-2.5 text-right">Rate</th>
-                    <th className="px-3 py-2.5 text-right">Disc</th>
-                    <th className="px-3 py-2.5 text-right">VAT</th>
-                    <th className="px-3 py-2.5 text-right">Value</th>
-                    <th className="px-3 py-2.5 w-[1%]" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/50">
-                  {lines.map((l, idx) => {
-                    const value = round2(l.qty * l.unitPrice * (1 - l.discountPct / 100))
-                    return (
-                      <tr key={`${l.sku}-${idx}`} className="bg-card">
-                        <td className="px-3 py-2.5 tabular-nums text-muted-foreground">{(idx + 1) * 10}</td>
-                        <td className="px-3 py-2.5">
-                          <span className="font-medium">{l.productName}</span>
-                          <span className="mt-0.5 block font-mono text-xs text-muted-foreground">{l.sku}</span>
-                        </td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">{l.qty.toFixed(0)}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">{l.unitPrice.toFixed(2)}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">{l.discountPct.toFixed(0)}%</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">{l.vatPct.toFixed(0)}%</td>
-                        <td className="px-3 py-2.5 text-right font-medium tabular-nums">{value.toFixed(2)}</td>
-                        <td className="px-3 py-2.5">
-                          <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={() => removeLine(idx)}>
-                            Remove
-                          </Button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                  {lines.length === 0 && (
-                    <tr>
-                      <td className="px-3 py-10 text-center text-sm text-muted-foreground" colSpan={8}>
-                        No products yet — use the form above.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="grid gap-3 rounded-xl bg-muted/25 p-4 sm:grid-cols-2 lg:grid-cols-5">
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Qty</p>
-                <p className="mt-1 text-lg font-semibold tabular-nums">{totals.qtyTotal}</p>
-              </div>
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Subtotal</p>
-                <p className="mt-1 text-lg font-semibold tabular-nums">
-                  {totals.gross.toFixed(2)} {currency}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">After discount</p>
-                <p className="mt-1 text-lg font-semibold tabular-nums">
-                  {totals.discounted.toFixed(2)} {currency}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">VAT</p>
-                <p className="mt-1 text-lg font-semibold tabular-nums">
-                  {totals.vat.toFixed(2)} {currency}
-                </p>
-              </div>
-              <div className="sm:col-span-2 lg:col-span-1 lg:border-l lg:border-border/60 lg:pl-4">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Net</p>
-                <p className="mt-1 text-xl font-bold tabular-nums text-primary">
-                  {totals.net.toFixed(2)} {currency}
-                </p>
-              </div>
-            </div>
-          </section>
-        </Panel>
-        </div>
-
-        <div className="space-y-3 lg:col-span-3">
-          <Panel className="space-y-4 border-primary/20 bg-primary/5 p-4 ring-1 ring-primary/10 lg:sticky lg:top-4">
-            <div>
-              <h2 className="text-sm font-semibold text-foreground">Finish order</h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Download merges your lines into the uploaded template. For PDFs, print opens the filled file; for Excel,
-                download then print from the spreadsheet app.
-              </p>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Button
-                type="button"
-                className="h-11 w-full justify-center gap-2"
-                disabled={!canMail}
-                onClick={mailOrderSummary}
-              >
-                <RiMailLine className="size-4" aria-hidden />
-                Mail summary
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="h-11 w-full justify-center gap-2 bg-background"
-                disabled={!lines.length || !selectedRetailer?.template || outputBusy}
-                onClick={() => void downloadFilledFromTemplate()}
-              >
-                <RiDownloadLine className="size-4" aria-hidden />
-                {outputBusy ? "Working…" : "Download filled file"}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                className="h-11 w-full justify-center gap-2"
-                disabled={!lines.length || !selectedRetailer?.template || outputBusy}
-                onClick={() => void printOrSaveFilledPdf()}
-              >
-                <RiPrinterLine className="size-4" aria-hidden />
-                {outputBusy ? "Working…" : "Print / Save PDF"}
-              </Button>
-            </div>
-            {!selectedRetailer?.template ? (
-              <p className="text-center text-xs text-muted-foreground">Upload a template to enable download and print.</p>
-            ) : !lines.length ? (
-              <p className="text-center text-xs text-muted-foreground">Add lines to enable download and print.</p>
-            ) : !selectedRetailerId ? (
-              <p className="text-center text-xs text-muted-foreground">Select a retailer to enable mail.</p>
-            ) : null}
-          </Panel>
-
-          {/* <details className="group rounded-xl border border-border/60 bg-card p-4 shadow-sm">
-            <summary className="cursor-pointer text-sm font-semibold outline-none [&::-webkit-details-marker]:hidden">
-              <span className="inline-flex w-full items-center justify-between">
-                More tools
-                <span className="text-xs font-normal text-muted-foreground group-open:hidden">Workflow, Odoo, stock</span>
-                <span className="hidden text-xs font-normal text-muted-foreground group-open:inline">Hide</span>
-              </span>
-            </summary>
-            <div className="mt-4 space-y-4 border-t border-border/60 pt-4">
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" variant="secondary" size="sm" onClick={saveDraft}>
-                  Save for Workflow
-                </Button>
-                <Button type="button" variant="outline" size="sm" asChild>
-                  <Link href="/stock-health">Inventory</Link>
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={!lines.length}
-                  onClick={downloadFallbackSupremeHtml}
-                >
-                  Supreme HTML (fallback)
-                </Button>
-              </div>
-              {source === "demo" ? (
-                <p className="rounded-md border border-amber-500/25 bg-amber-500/8 px-3 py-2 text-xs text-muted-foreground">
-                  Demo mode: Odoo below is simulated until you connect live Odoo.
-                </p>
-              ) : null}
-              <div className="space-y-2 rounded-lg border border-border/60 bg-muted/15 p-3">
-                <p className="text-xs font-medium text-muted-foreground">
-                  {source === "demo" ? "Simulate SO" : "Draft sale order in Odoo"}
-                </p>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    className="h-9"
-                    placeholder={source === "demo" ? "Customer ref (optional)" : "Customer partner id"}
-                    value={soPartnerId}
-                    onChange={(e) => setSoPartnerId(e.target.value)}
-                  />
-                  <Button type="button" size="sm" className="h-9 shrink-0" disabled={soLoading} onClick={() => void createSoInOdoo()}>
-                    {soLoading ? "…" : source === "demo" ? "Simulate" : "Create SO"}
-                  </Button>
-                </div>
-                {soResult ? (
-                  <p
-                    className={cn(
-                      "text-xs",
-                      soResult.startsWith("✓") ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground"
-                    )}
-                  >
-                    {soResult}
-                  </p>
-                ) : null}
-              </div>
-              <div>
-                <p className="mb-2 text-xs font-medium text-muted-foreground">Stock vs these lines</p>
-                {stock.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Add lines to see availability.</p>
+                {source === "odoo" ? (
+                  <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-800 dark:text-emerald-200">
+                    Live · Odoo
+                  </span>
                 ) : (
-                  <ul className="max-h-48 space-y-1.5 overflow-y-auto text-xs">
-                    {stock.map((s) => (
-                      <li
-                        key={s.sku}
-                        className={cn(
-                          "flex flex-col gap-0.5 rounded-md border px-2 py-1.5 sm:flex-row sm:items-center sm:justify-between",
-                          s.ok ? "border-emerald-500/25 bg-emerald-500/5" : "border-rose-500/25 bg-rose-500/5"
-                        )}
-                      >
-                        <span className="font-mono text-[11px]">{s.sku}</span>
-                        <span className="text-muted-foreground">
-                          need {s.requested} · have {s.available}
-                          {s.ok ? "" : ` · short ${s.requested - s.available}`}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                  <span className="inline-flex items-center rounded-full border border-border/60 bg-muted/40 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    Sample data
+                  </span>
                 )}
               </div>
+
+              <div className="space-y-3 p-4 sm:p-5">
+                <div>
+                  <FieldLabel htmlFor="purchase-retailer-select">Select retailer</FieldLabel>
+                  <div className="flex gap-2">
+                    <select
+                      id="purchase-retailer-select"
+                      className={cn(
+                        "h-10 min-w-0 flex-1 cursor-pointer rounded-xl border border-border/70 bg-background px-3 text-sm shadow-sm transition-colors",
+                        "hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
+                      )}
+                      value={selectedRetailerId ?? ""}
+                      onChange={(e) => {
+                        const id = e.target.value || null
+                        const base = retailers.length > 0 ? retailers : loadRetailerTemplatesState().retailers
+                        const ok = persistRetailers(base, id)
+                        if (!ok) {
+                          setTemplateHint("Could not save to browser storage (quota full or private mode).")
+                          setTimeout(() => setTemplateHint(null), 8000)
+                        }
+                      }}
+                    >
+                      <option value="">Select a retailer…</option>
+                      {retailers.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name}{r.template ? " · custom template" : r.useDefaultMasterSheet ? " · default template" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedRetailerId && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-10 shrink-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => removeRetailer(selectedRetailerId)}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {selectedRetailerId ? (
+                  <div className={cn(
+                    "flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 transition-colors",
+                    selectedRetailer?.template
+                      ? "border-emerald-500/30 bg-emerald-500/5"
+                      : selectedRetailer?.useDefaultMasterSheet
+                        ? "border-primary/25 bg-primary/5"
+                        : "border-dashed border-amber-500/40 bg-amber-500/5"
+                  )}>
+                    <div className="min-w-0">
+                      <p className={cn(
+                        "text-sm font-medium",
+                        selectedRetailer?.template ? "text-emerald-800 dark:text-emerald-200"
+                          : selectedRetailer?.useDefaultMasterSheet ? "text-primary"
+                            : "text-amber-800 dark:text-amber-200"
+                      )}>
+                        {selectedRetailer?.template
+                          ? "Custom template attached"
+                          : selectedRetailer?.useDefaultMasterSheet
+                            ? "Using default master sheet"
+                            : "No template — upload or use default"}
+                      </p>
+                      {selectedRetailer?.template && (
+                        <p className="mt-0.5 font-mono text-xs text-muted-foreground">{selectedRetailer.template.fileName}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <input ref={fileInputRef} type="file" className="hidden" accept=".xlsx,.xls,.pdf,.csv,.doc,.docx,application/*" onChange={(e) => void onTemplateFile(e)} />
+                      <Button type="button" variant="secondary" size="sm" className="gap-1.5" disabled={!selectedRetailerId} onClick={() => fileInputRef.current?.click()}>
+                        <RiUploadCloud2Line className="size-3.5" aria-hidden />
+                        {selectedRetailer?.template ? "Replace" : "Upload"}
+                      </Button>
+                      {selectedRetailer?.template && (
+                        <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={downloadStoredTemplate}>
+                          <RiDownloadLine className="size-3.5" aria-hidden />
+                          Download
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ) : retailers.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 px-4 py-5 text-center">
+                    <p className="text-sm font-medium">No retailers yet</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Add a retailer to manage their template and build orders.</p>
+                    <Button type="button" size="sm" className="mt-3 gap-1.5" onClick={() => setAddRetailerOpen(true)}>
+                      <RiAddLine className="size-4" aria-hidden />
+                      Add first retailer
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </section>
+
+            {/* ── Order header — collapsible ── */}
+            <section className="p-0">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-3 px-5 py-3.5 text-left transition-colors hover:bg-muted/25"
+                aria-expanded={orderHeaderOpen}
+                onClick={() => setOrderHeaderOpen((o) => !o)}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "flex size-6 shrink-0 items-center justify-center rounded-md text-xs font-bold transition-colors",
+                    orderHeaderOpen ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                  )}>
+                    {orderHeaderOpen ? "−" : "+"}
+                  </div>
+                  <div>
+                    <SectionTitle>Order header</SectionTitle>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {orderRef} · {orderDate} → {deliveryDate} · {currency}
+                    </p>
+                  </div>
+                </div>
+                <RiArrowDownSLine className={cn("size-5 shrink-0 text-muted-foreground transition-transform duration-200", orderHeaderOpen && "rotate-180")} aria-hidden />
+              </button>
+              {orderHeaderOpen && (
+                <div className="grid gap-3 border-t border-border/60 bg-muted/10 px-5 pb-5 pt-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div><FieldLabel>Reference</FieldLabel><Input className="h-10" value={orderRef} onChange={(e) => setOrderRef(e.target.value)} /></div>
+                  <div><FieldLabel>Order date</FieldLabel><Input className="h-10" type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} /></div>
+                  <div><FieldLabel>Delivery date</FieldLabel><Input className="h-10" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} /></div>
+                  <div><FieldLabel>Retailer code</FieldLabel><Input className="h-10" value={retailerCode} onChange={(e) => setRetailerCode(e.target.value)} placeholder="Optional" /></div>
+                  <div className="sm:col-span-2"><FieldLabel>Deliver to</FieldLabel><Input className="h-10" value={deliverTo} onChange={(e) => setDeliverTo(e.target.value)} /></div>
+                  <div><FieldLabel>Currency</FieldLabel><Input className="h-10" value={currency} onChange={(e) => setCurrency(e.target.value)} /></div>
+                  <div><FieldLabel>Payment terms</FieldLabel><Input className="h-10" value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} /></div>
+                  <div className="sm:col-span-2 lg:col-span-4"><FieldLabel>Notes on printed form</FieldLabel><Input className="h-10" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" /></div>
+                </div>
+              )}
+            </section>
+
+            {/* ── Line items ── */}
+            <section className="space-y-4 p-4 sm:p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <SectionTitle>Line items</SectionTitle>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">Add products — value is computed automatically per line</p>
+                </div>
+                {lines.length > 0 && (
+                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-primary">
+                    {lines.length} line{lines.length === 1 ? "" : "s"}
+                  </span>
+                )}
+              </div>
+
+              {/* Add-a-line form */}
+              <div className="rounded-xl border border-border/60 bg-gradient-to-b from-muted/20 to-muted/5 p-4">
+                <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Add product</p>
+                <div className="grid gap-3 md:grid-cols-12 md:items-end">
+                  <div className="md:col-span-5">
+                    <FieldLabel>Product</FieldLabel>
+                    <select
+                      className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
+                      value={sku}
+                      onChange={(e) => setSku(e.target.value)}
+                    >
+                      {variants.map((v) => (
+                        <option key={v.id} value={v.sku}>{v.sku} — {v.productName}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="md:col-span-2">
+                    <FieldLabel>Qty</FieldLabel>
+                    <Input className="h-10" type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value) || 1)} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <FieldLabel>Rate ({currency})</FieldLabel>
+                    <Input className="h-10" type="number" min={0} step="0.01" value={unitPrice} onChange={(e) => setUnitPrice(Number(e.target.value) || 0)} />
+                  </div>
+                  <div className="md:col-span-1">
+                    <FieldLabel>Disc %</FieldLabel>
+                    <Input className="h-10" type="number" min={0} step="0.01" value={discountPct} onChange={(e) => setDiscountPct(Number(e.target.value) || 0)} />
+                  </div>
+                  <div className="md:col-span-1">
+                    <FieldLabel>VAT %</FieldLabel>
+                    <Input className="h-10" type="number" min={0} step="0.01" value={vatPct} onChange={(e) => setVatPct(Number(e.target.value) || 0)} />
+                  </div>
+                  <div className="md:col-span-1">
+                    <Button type="button" size="sm" className="h-10 w-full gap-1" onClick={addLine}>
+                      <RiAddLine className="size-4" aria-hidden />
+                      Add
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Lines table */}
+              <div className="overflow-x-auto rounded-xl border border-border/60 shadow-sm">
+                <table className="w-full min-w-[700px] text-sm">
+                  <thead>
+                    <tr className="border-b border-border/60 bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      <th className="px-3 py-2.5">#</th>
+                      <th className="px-3 py-2.5">Product / SKU</th>
+                      <th className="px-3 py-2.5 text-right">Qty</th>
+                      <th className="px-3 py-2.5 text-right">Rate</th>
+                      <th className="px-3 py-2.5 text-right">Disc</th>
+                      <th className="px-3 py-2.5 text-right">VAT</th>
+                      <th className="px-3 py-2.5 text-right">Value</th>
+                      <th className="w-[1%] px-3 py-2.5" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/40">
+                    {lines.map((l, idx) => {
+                      const value = round2(l.qty * l.unitPrice * (1 - l.discountPct / 100))
+                      return (
+                        <tr key={`${l.sku}-${idx}`} className="bg-card transition-colors hover:bg-muted/20">
+                          <td className="px-3 py-2.5 font-mono text-xs tabular-nums text-muted-foreground">{(idx + 1) * 10}</td>
+                          <td className="px-3 py-2.5">
+                            <span className="font-medium">{l.productName}</span>
+                            <span className="mt-0.5 block font-mono text-xs text-muted-foreground">{l.sku}</span>
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-medium tabular-nums">{l.qty}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{l.unitPrice.toFixed(2)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">
+                            {l.discountPct > 0 ? (
+                              <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                                {l.discountPct}%
+                              </span>
+                            ) : <span className="text-muted-foreground/50">—</span>}
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{l.vatPct}%</td>
+                          <td className="px-3 py-2.5 text-right font-semibold tabular-nums">
+                            {value.toFixed(2)} <span className="ml-0.5 text-[11px] font-normal text-muted-foreground">{currency}</span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <Button type="button" variant="ghost" size="sm" className="size-7 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeLine(idx)}>
+                              <RiCloseLine className="size-3.5" aria-hidden />
+                            </Button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                    {lines.length === 0 && (
+                      <tr>
+                        <td className="py-12 text-center text-sm text-muted-foreground" colSpan={8}>
+                          <span className="block text-3xl opacity-20 mb-2">📦</span>
+                          No products yet — use the form above to add line items.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Totals bar */}
+              {lines.length > 0 && (
+                <div className="grid gap-2 rounded-xl border border-border/50 bg-gradient-to-r from-primary/5 via-muted/20 to-muted/10 px-4 py-3 sm:grid-cols-5">
+                  {[
+                    { label: "Total qty", value: String(totals.qtyTotal), suffix: "" },
+                    { label: "Subtotal", value: totals.gross.toFixed(2), suffix: currency },
+                    { label: "After disc", value: totals.discounted.toFixed(2), suffix: currency },
+                    { label: "VAT", value: totals.vat.toFixed(2), suffix: currency },
+                  ].map(({ label, value, suffix }) => (
+                    <div key={label} className="text-center">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+                      <p className="mt-0.5 text-lg font-bold tabular-nums">
+                        {value}{suffix && <span className="ml-1 text-xs font-normal text-muted-foreground">{suffix}</span>}
+                      </p>
+                    </div>
+                  ))}
+                  <div className="rounded-lg bg-primary/10 px-3 py-2 text-center ring-1 ring-primary/20">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-primary/80">Net total</p>
+                    <p className="mt-0.5 text-xl font-extrabold tabular-nums text-primary">
+                      {totals.net.toFixed(2)} <span className="text-sm font-normal">{currency}</span>
+                    </p>
+                  </div>
+                </div>
+              )}
+            </section>
+          </Panel>
+        </div>
+
+        {/* ─── Right: finish order sidebar ─── */}
+        <div className="space-y-3 lg:col-span-3">
+          <Panel className="overflow-hidden border-border/60 p-0 shadow-md ring-1 ring-black/5 dark:ring-white/5 lg:sticky lg:top-4">
+            <div className="border-b border-border/50 bg-gradient-to-r from-primary/8 to-transparent px-4 py-3">
+              <h2 className="text-sm font-semibold">Finish order</h2>
+              <p className="text-[11px] text-muted-foreground">
+                {selectedRetailer ? selectedRetailer.name : "Select a retailer first"}
+                {lines.length > 0 ? ` · ${lines.length} line${lines.length === 1 ? "" : "s"}` : ""}
+              </p>
             </div>
-          </details> */}
+            <div className="space-y-2 p-3">
+              {([
+                {
+                  icon: <RiMailLine className="size-4" aria-hidden />,
+                  label: "Mail summary",
+                  detail: "Send order details via email",
+                  onClick: mailOrderSummary,
+                  active: canMail,
+                  accent: true,
+                },
+                {
+                  icon: <RiDownloadLine className="size-4" aria-hidden />,
+                  label: outputBusy ? "Working…" : "Download filled file",
+                  detail: "Merged into retailer template",
+                  onClick: () => void downloadFilledFromTemplate(),
+                  active: Boolean(lines.length && hasTemplateForOutput && !outputBusy),
+                  accent: false,
+                },
+                {
+                  icon: <RiPrinterLine className="size-4" aria-hidden />,
+                  label: outputBusy ? "Working…" : "Print / Save PDF",
+                  detail: "Open print dialog or save PDF",
+                  onClick: () => void printOrSaveFilledPdf(),
+                  active: Boolean(lines.length && hasTemplateForOutput && !outputBusy),
+                  accent: false,
+                },
+              ] as Array<{ icon: React.ReactNode; label: string; detail: string; onClick: () => void; active: boolean; accent: boolean }>).map(({ icon, label, detail, onClick, active, accent }) => (
+                <button
+                  key={label}
+                  type="button"
+                  disabled={!active}
+                  onClick={onClick}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all",
+                    active
+                      ? accent
+                        ? "cursor-pointer border-primary/25 bg-primary/8 hover:bg-primary/12"
+                        : "cursor-pointer border-border/60 bg-card hover:bg-muted/25"
+                      : "cursor-not-allowed border-border/40 bg-muted/10 opacity-50"
+                  )}
+                >
+                  <span className={cn(
+                    "flex size-9 shrink-0 items-center justify-center rounded-lg",
+                    active && accent ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
+                  )}>
+                    {icon}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{label}</p>
+                    <p className="text-[11px] text-muted-foreground">{detail}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {(!selectedRetailerId || !hasTemplateForOutput || !lines.length) && (
+              <div className="border-t border-border/50 px-4 py-3">
+                <p className="text-[11px] text-muted-foreground">
+                  {!selectedRetailerId
+                    ? "① Select a retailer to enable mail and download."
+                    : !hasTemplateForOutput
+                      ? "② Add a template to this retailer (or use default master) to enable download."
+                      : "③ Add at least one line to enable output."}
+                </p>
+              </div>
+            )}
+
+            {lines.length > 0 && (
+              <div className="border-t border-border/50 p-3">
+                <p className="mb-2 text-[11px] font-medium text-muted-foreground">No template? Use our layout:</p>
+                <Button type="button" variant="ghost" size="sm" className="h-8 w-full justify-center gap-1.5 text-xs" onClick={downloadFallbackSupremeHtml}>
+                  <RiDownloadLine className="mr-1.5 size-3.5" aria-hidden />
+                  Supreme HTML order
+                </Button>
+              </div>
+            )}
+          </Panel>
+
+          {lines.length > 0 && stock.length > 0 && (
+            <Panel className="overflow-hidden border-border/60 p-0 shadow-sm">
+              <div className="border-b border-border/50 bg-muted/25 px-4 py-2.5">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Stock vs order</p>
+              </div>
+              <ul className="divide-y divide-border/40">
+                {stock.map((s) => (
+                  <li key={s.sku} className={cn("flex items-center justify-between gap-2 px-4 py-2 text-xs", s.ok ? "bg-emerald-500/3" : "bg-rose-500/3")}>
+                    <span className="font-mono text-[11px] text-foreground">{s.sku}</span>
+                    <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums", s.ok ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-rose-500/15 text-rose-700 dark:text-rose-300")}>
+                      {s.ok ? `✓ ${s.available}` : `−${s.requested - s.available}`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
         </div>
       </div>
+
+      {/* ── Add Retailer dialog ── */}
+      <Dialog.Root
+        open={addRetailerOpen}
+        onOpenChange={(open) => {
+          setAddRetailerOpen(open)
+          if (!open) resetAddRetailerForm()
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/50 backdrop-blur-[1px] data-[state=closed]:animate-out data-[state=open]:animate-in" />
+          <Dialog.Content className="data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed left-1/2 top-1/2 z-50 max-h-[min(90vh,calc(100dvh-2rem))] w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-border/80 bg-card p-5 shadow-xl duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in sm:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <Dialog.Title className="text-lg font-semibold tracking-tight text-foreground">Add retailer</Dialog.Title>
+              <Dialog.Close asChild>
+                <Button type="button" variant="ghost" size="icon" className="size-9 shrink-0 rounded-xl" aria-label="Close">
+                  <RiCloseLine className="size-5" aria-hidden />
+                </Button>
+              </Dialog.Close>
+            </div>
+            <Dialog.Description className="mt-1 text-sm text-muted-foreground">
+              Name this retailer and attach their order template, or use the default master sheet.
+            </Dialog.Description>
+
+            <div className="mt-5 space-y-4">
+              <div>
+                <FieldLabel htmlFor="add-retailer-name">Retailer name</FieldLabel>
+                <Input
+                  id="add-retailer-name"
+                  autoComplete="organization"
+                  placeholder="e.g. City Toys — Marina"
+                  className="h-11 rounded-xl"
+                  value={newRetailerName}
+                  onChange={(e) => setNewRetailerName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); void submitAddRetailer() }
+                  }}
+                />
+              </div>
+
+              <label
+                className={cn(
+                  "flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 text-sm transition-colors",
+                  addRetailerUseDefault ? "border-primary/45 bg-primary/8 ring-1 ring-primary/15" : "border-border/70 bg-muted/10 hover:bg-muted/20"
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={addRetailerUseDefault}
+                  onChange={(e) => {
+                    const on = e.target.checked
+                    setAddRetailerUseDefault(on)
+                    if (on) {
+                      setAddRetailerTemplateFile(null)
+                      setDialogTemplateDrag(false)
+                      if (addRetailerTemplateInputRef.current) addRetailerTemplateInputRef.current.value = ""
+                    }
+                  }}
+                  className="mt-0.5 size-4 shrink-0 rounded border-input accent-primary"
+                />
+                <span className="min-w-0">
+                  <span className="font-medium text-foreground">Use default master sheet</span>
+                  <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                    Use if they don&apos;t have their own file — orders merge into{" "}
+                    <span className="font-medium text-foreground">{DEFAULT_MASTER_SHEET_NAME}</span>.
+                  </span>
+                </span>
+              </label>
+
+              <div className={cn(addRetailerUseDefault && "pointer-events-none opacity-50")}>
+                <FieldLabel>Their order template</FieldLabel>
+                <input
+                  ref={addRetailerTemplateInputRef}
+                  type="file"
+                  className="hidden"
+                  accept=".xlsx,.xls,.pdf,.csv,.doc,.docx,application/*"
+                  disabled={addRetailerUseDefault}
+                  onChange={(e) => { const f = e.target.files?.[0] ?? null; e.target.value = ""; ingestAddRetailerTemplateFile(f) }}
+                />
+                <div
+                  role="button"
+                  tabIndex={addRetailerUseDefault ? -1 : 0}
+                  aria-disabled={addRetailerUseDefault}
+                  onKeyDown={(e) => { if (addRetailerUseDefault) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); addRetailerTemplateInputRef.current?.click() } }}
+                  onDragEnter={(e) => { e.preventDefault(); if (!addRetailerUseDefault) setDialogTemplateDrag(true) }}
+                  onDragOver={(e) => { e.preventDefault(); if (!addRetailerUseDefault) setDialogTemplateDrag(true) }}
+                  onDragLeave={(e) => { e.preventDefault(); if (!e.currentTarget.contains(e.relatedTarget as Node)) setDialogTemplateDrag(false) }}
+                  onDrop={(e) => { e.preventDefault(); setDialogTemplateDrag(false); if (addRetailerUseDefault) return; const f = e.dataTransfer.files?.[0] ?? null; ingestAddRetailerTemplateFile(f) }}
+                  onClick={() => !addRetailerUseDefault && addRetailerTemplateInputRef.current?.click()}
+                  className={cn(
+                    "group cursor-pointer rounded-2xl border-2 border-dashed px-3 py-5 text-center transition-all duration-200",
+                    addRetailerUseDefault
+                      ? "cursor-not-allowed border-border/40 bg-muted/10"
+                      : dialogTemplateDrag
+                        ? "border-primary/55 bg-primary/8 shadow-md ring-2 ring-primary/20"
+                        : "border-border/70 bg-linear-to-b from-muted/25 to-muted/10 hover:border-primary/40 hover:shadow-sm"
+                  )}
+                >
+                  <span className="mx-auto flex size-12 items-center justify-center rounded-xl bg-background/80 shadow-sm ring-1 ring-border/50 transition-transform group-hover:scale-[1.02]">
+                    {addRetailerBusy ? (
+                      <RiLoader4Line className="size-7 animate-spin text-primary" aria-hidden />
+                    ) : (
+                      <RiUploadCloud2Line className="size-7 text-primary/80" aria-hidden />
+                    )}
+                  </span>
+                  <p className="mt-3 text-xs font-semibold text-foreground">
+                    {addRetailerTemplateFile ? addRetailerTemplateFile.name : "Drop order template here"}
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">PDF, Excel, or CSV · same file they send you</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 h-8 border-border/80 bg-background/90 text-xs"
+                    disabled={addRetailerUseDefault || addRetailerBusy}
+                    onClick={(e) => { e.stopPropagation(); addRetailerTemplateInputRef.current?.click() }}
+                  >
+                    Browse files
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+              <Dialog.Close asChild>
+                <Button type="button" variant="outline" className="rounded-xl sm:min-w-[100px]">Cancel</Button>
+              </Dialog.Close>
+              <Button type="button" className="gap-2 rounded-xl sm:min-w-[120px]" disabled={addRetailerBusy} onClick={() => void submitAddRetailer()}>
+                {addRetailerBusy ? (
+                  <><RiLoader4Line className="size-4 shrink-0 animate-spin" aria-hidden />Saving…</>
+                ) : "Save retailer"}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   )
 }

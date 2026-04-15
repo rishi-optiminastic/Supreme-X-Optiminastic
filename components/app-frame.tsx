@@ -19,27 +19,66 @@ import {
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import Image from "next/image"
 
-const links = [
+type NavChild = { href: string; label: string }
+
+type NavItem =
+  | { href: string; label: string; icon: typeof RiHome5Line; children?: undefined }
+  | {
+    href: string
+    label: string
+    icon: typeof RiPulseLine
+    children: readonly NavChild[]
+  }
+
+const links: readonly NavItem[] = [
   { href: "/", label: "Home", icon: RiHome5Line },
-  { href: "/prediction", label: "Trends", icon: RiPulseLine },
-  { href: "/pricing", label: "RSP", icon: RiPriceTag3Line },
+  {
+    href: "/prediction",
+    label: "Trends",
+    icon: RiPulseLine,
+    children: [
+      { href: "/prediction", label: "Overview" },
+      { href: "/prediction/trending-toys", label: "Global Trends" },
+    ],
+  },
+  { href: "/rsp", label: "RSP", icon: RiPriceTag3Line },
   { href: "/purchase", label: "Order creation", icon: RiShoppingCart2Line },
-  { href: "/stock-health", label: "Inventory", icon: RiStackLine },
+  { href: "/pi", label: "PI", icon: RiStackLine },
+  { href: "/stock-health", label: "PO", icon: RiStackLine },
 ] as const
 
 const sectionHints: Record<string, string> = {
   "/": "Choose a workspace from the sidebar",
   "/prediction": "Demand strength, cover weeks, market read, and AI",
-  "/pricing": "Landed cost, shelf scenarios, and margin checks",
+  "/prediction/trending-toys":
+    "Search, filter by region, photos or links to shop and images",
+  "/rsp": "Enter COGS, then review shelf prices, quote sheet, and share if needed",
   "/purchase": "Retailer templates, lines, mail or export filled files",
-  "/stock-health": "Segments, capital hints, PO upload vs sellable stock",
+  "/stock-health": "Upload a PO, match lines to sellable stock, portfolio snapshot below",
+  "/pi": "Upload a PI workbook, match lines to sellable stock, portfolio snapshot below",
   "/workflow": "Saved draft lines → Odoo PO / SO helpers",
 }
 
 function sectionForPath(pathname: string) {
   if (pathname === "/") {
     return { title: "Home", hint: sectionHints["/"]! }
+  }
+  if (pathname === "/prediction/trending-toys") {
+    return {
+      title: "Global toy trends",
+      hint: sectionHints["/prediction/trending-toys"] ?? "",
+    }
+  }
+  if (pathname.startsWith("/rsp/share/") || pathname.startsWith("/pricing/share/")) {
+    return {
+      title: "Shared RSP",
+      hint: "Anyone with the link can edit this sheet.",
+    }
+  }
+  if (pathname === "/pricing" || pathname.startsWith("/pricing/")) {
+    return { title: "RSP", hint: sectionHints["/rsp"] ?? "" }
   }
   const hit = links.find(
     (l) => l.href !== "/" && (pathname === l.href || pathname.startsWith(`${l.href}/`))
@@ -48,7 +87,7 @@ function sectionForPath(pathname: string) {
     return { title: hit.label, hint: sectionHints[hit.href] ?? "" }
   }
   if (pathname.startsWith("/inventory")) {
-    return { title: "Inventory", hint: sectionHints["/stock-health"]! }
+    return { title: "PO", hint: sectionHints["/stock-health"]! }
   }
   if (pathname.startsWith("/workflow")) {
     return { title: "Workflow", hint: sectionHints["/workflow"]! }
@@ -139,26 +178,73 @@ function NavLinks({
 }) {
   return (
     <nav className="flex flex-col gap-0.5 p-2">
-      {links.map(({ href, label, icon: Icon }) => {
-        const active =
-          href === "/"
-            ? pathname === "/"
-            : pathname === href || pathname.startsWith(`${href}/`)
+      {links.map((item) => {
+        const Icon = item.icon
+        if (!item.children) {
+          const active =
+            item.href === "/"
+              ? pathname === "/"
+              : pathname === item.href || pathname.startsWith(`${item.href}/`)
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={onNavigate}
+              className={cn(
+                "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                active
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <Icon className="size-[18px] shrink-0 opacity-90" aria-hidden />
+              {item.label}
+            </Link>
+          )
+        }
+
+        const parentActive =
+          pathname === item.href || pathname.startsWith(`${item.href}/`)
+
         return (
-          <Link
-            key={href}
-            href={href}
-            onClick={onNavigate}
-            className={cn(
-              "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-              active
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-          >
-            <Icon className="size-[18px] shrink-0 opacity-90" aria-hidden />
-            {label}
-          </Link>
+          <div key={item.href} className="flex flex-col gap-0.5">
+            <Link
+              href={item.href}
+              onClick={onNavigate}
+              className={cn(
+                "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                parentActive
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <Icon className="size-[18px] shrink-0 opacity-90" aria-hidden />
+              {item.label}
+            </Link>
+            <div className="ml-2 flex flex-col gap-0.5 border-l border-border/60 pl-2">
+              {item.children.map((child) => {
+                const childActive =
+                  child.href === "/prediction"
+                    ? pathname === "/prediction"
+                    : pathname === child.href
+                return (
+                  <Link
+                    key={child.href + child.label}
+                    href={child.href}
+                    onClick={onNavigate}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors",
+                      childActive
+                        ? "bg-primary/15 text-primary"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    {child.label}
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
         )
       })}
     </nav>
@@ -204,7 +290,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
             <p className="truncate text-[10px] text-muted-foreground">{section.hint}</p>
           ) : null}
         </div>
-        <WorkspaceClock compact />
+        {/* <WorkspaceClock compact /> */}
         <ThemeToggle />
       </header>
 
@@ -243,12 +329,8 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
 
       <aside className="hidden w-56 shrink-0 flex-col border-r border-border/40 bg-background/90 backdrop-blur-md dark:bg-background/80 md:sticky md:top-0 md:flex md:h-svh">
         <div className="border-b border-border/40 px-4 py-4">
-          <Link
-            href="/"
-            className="text-base font-semibold tracking-tight text-foreground"
-          >
-            Supreme <span className="text-primary">AI</span>
-          </Link>
+          <Image src={"https://www.supremeworlds.com/wp-content/uploads/2022/11/supreme-world-logo-xl.png"} alt="Supreme AI" width={100} height={100} />
+          {/* <span className="text-primary">AI</span> */}
         </div>
         <NavLinks pathname={pathname} />
       </aside>
@@ -257,7 +339,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
         <header className="sticky top-0 z-30 hidden h-[57px] shrink-0 items-center justify-between gap-4 border-b border-border/40 bg-background/85 px-4  backdrop-blur-md dark:bg-background/80 md:flex lg:px-6">
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold tracking-tight text-foreground">
-              {section.title} 
+              {section.title}
             </h2>
             {section.hint ? (
               <p className="truncate text-xs text-muted-foreground">{section.hint}</p>
@@ -265,12 +347,12 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex shrink-0 items-center gap-3">
             <ThemeHotkeyHint />
-            <WorkspaceClock />
+            {/* <WorkspaceClock /> */}
             <ThemeToggle />
           </div>
         </header>
 
-        <main className="mx-auto min-w-0 flex-1 max-w-7xl px-4 py-8 sm:py-10">
+        <main className=" max-w-7xl px-4 py-8 sm:py-10">
           {children}
         </main>
       </div>

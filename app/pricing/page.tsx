@@ -1,5 +1,5 @@
-import { PricingWorkspace } from "@/components/pricing-workspace"
+import { redirect } from "next/navigation"
 
-export default function PricingPage() {
-  return <PricingWorkspace />
+export default function LegacyPricingPage() {
+  redirect("/rsp")
 }

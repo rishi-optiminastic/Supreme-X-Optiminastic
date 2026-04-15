@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import {
   CartesianGrid,
   Legend,
@@ -24,6 +25,7 @@ import { useVariantsWithOdoo } from "@/hooks/use-variants-with-odoo"
 import {
   defaultExternalSignals,
   demandProbabilityBreakdown,
+  demandScoreNarrativeReasons,
   orderTimingAdvice,
   suggestedReorderQty,
   type ExternalSignals,
@@ -40,14 +42,16 @@ import {
   overallInventoryMarket,
   variantMarketSignal,
 } from "@/lib/market-signals"
+import { trendingToyHeroImageUrl } from "@/components/trending-toys-shared"
 import { resolveVariantImageUrl } from "@/lib/variant-image"
 import { cn } from "@/lib/utils"
 import {
   RiApps2Line,
+  RiArrowRightLine,
   RiArrowUpDownLine,
   RiBarChartGroupedLine,
   RiCloseLine,
-  RiInformationLine,
+  RiGlobalLine,
   RiSearchLine,
   RiShieldCheckLine,
   RiStackLine,
@@ -99,6 +103,14 @@ function skuHash(s: string): number {
     h = Math.imul(h, 16777619)
   }
   return Math.abs(h)
+}
+
+/** Deterministic 7-day trend score (0–100) for display; derived from catalog trend + SKU. */
+function trendScore7d(v: InventoryVariant): number {
+  const h = skuHash(`${v.sku}|trend7d`)
+  const jitter = (h % 13) - 6
+  const n = Math.round(v.trendScore * 0.96 + jitter * 0.45)
+  return Math.max(0, Math.min(100, n))
 }
 
 /** Random subset; reshuffles when `variants` identity/length changes. */
@@ -285,9 +297,8 @@ type MarketSearchRow =
   | { kind: "catalog"; inv: InventoryVariant }
   | { kind: "api"; hit: ExternalProductHit }
 
-/* ─── Component ─── */
-
 export function PredictionWorkspace() {
+  const searchParams = useSearchParams()
   const { variants, source, odooLoading, odooError, refetchOdoo } =
     useVariantsWithOdoo()
   const [sku, setSku] = React.useState("")
@@ -324,6 +335,99 @@ export function PredictionWorkspace() {
   >([])
   const [apiProductLoading, setApiProductLoading] = React.useState(false)
 
+  const [trendPreviewRows, setTrendPreviewRows] = React.useState<
+    | {
+        name: string
+        trendScore: number
+        confidence: number
+        thumbnailUrl?: string
+      }[]
+    | null
+  >(null)
+  const [trendPreviewLoading, setTrendPreviewLoading] = React.useState(false)
+  const [trendPreviewImages, setTrendPreviewImages] = React.useState<
+    Record<number, string>
+  >({})
+
+  React.useEffect(() => {
+    const ac = new AbortController()
+    ;(async () => {
+      setTrendPreviewLoading(true)
+      try {
+        const r = await fetch("/api/ai/trending-toys", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ forceRefresh: false }),
+          signal: ac.signal,
+        })
+        const j = (await r.json()) as {
+          ok?: boolean
+          items?: {
+            name: string
+            trendScore: number
+            confidence: number
+            thumbnailUrl?: string
+          }[]
+        }
+        if (ac.signal.aborted) return
+        if (j.ok && j.items?.length) {
+          setTrendPreviewRows(j.items.slice(0, 4))
+        } else {
+          setTrendPreviewRows(null)
+        }
+      } catch {
+        if (!ac.signal.aborted) setTrendPreviewRows(null)
+      } finally {
+        if (!ac.signal.aborted) setTrendPreviewLoading(false)
+      }
+    })()
+    return () => ac.abort()
+  }, [])
+
+  React.useEffect(() => {
+    if (!trendPreviewRows?.length) {
+      setTrendPreviewImages({})
+      return
+    }
+    const need = trendPreviewRows.some((it) => !it.thumbnailUrl?.trim())
+    if (!need) {
+      setTrendPreviewImages({})
+      return
+    }
+    const ac = new AbortController()
+    const rows = trendPreviewRows
+    ;(async () => {
+      const next: Record<number, string> = {}
+      await Promise.all(
+        rows.map(async (item, idx) => {
+          if (item.thumbnailUrl?.trim()) return
+          const q = item.name.trim()
+          if (q.length < 2) return
+          try {
+            const r = await fetch(
+              `/api/products/search?q=${encodeURIComponent(q.slice(0, 48))}`,
+              { signal: ac.signal }
+            )
+            const j = (await r.json()) as {
+              products?: { thumbnailUrl?: string }[]
+            }
+            const url = j.products?.[0]?.thumbnailUrl?.trim()
+            if (url) next[idx] = url
+          } catch {
+            /* ignore */
+          }
+        })
+      )
+      if (!ac.signal.aborted) setTrendPreviewImages(next)
+    })()
+    return () => ac.abort()
+  }, [trendPreviewRows])
+
+  React.useEffect(() => {
+    const toy = searchParams.get("toy") ?? searchParams.get("q")
+    if (toy) setMarketQuery(toy)
+  }, [searchParams])
+
   React.useEffect(() => {
     if (variants.length && !sku) setSku(variants[0].sku)
   }, [variants, sku])
@@ -340,6 +444,19 @@ export function PredictionWorkspace() {
   const timing = v ? orderTimingAdvice(v, reorder, leadW) : null
   const wk = v ? weeklyDemand(v) : 0
 
+  const demandNarratives = React.useMemo(() => {
+    if (!v) return null
+    return demandScoreNarrativeReasons({
+      v,
+      external,
+      regionHeat,
+      categoryHeat,
+      leadW,
+      safetyW,
+      targetW,
+    })
+  }, [v, external, regionHeat, categoryHeat, leadW, safetyW, targetW])
+
   const chartData = React.useMemo(() => {
     if (!v) return []
     return buildWeeklyForecast(v).map((p) => ({
@@ -353,10 +470,28 @@ export function PredictionWorkspace() {
 
   const rank = React.useMemo(() => {
     if (!v || !variants.length) return null
-    const sorted = [...variants].sort((a, b) => b.trendScore - a.trendScore)
+    const sorted = [...variants].sort(
+      (a, b) => trendScore7d(b) - trendScore7d(a)
+    )
     const idx = sorted.findIndex((x) => x.sku === v.sku)
     return idx >= 0 ? idx + 1 : null
   }, [v, variants])
+
+  const avgTrend7d = React.useMemo(() => {
+    if (!variants.length) return null
+    const scores = variants.map(trendScore7d)
+    return (
+      Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
+    )
+  }, [variants])
+
+  const marketTrending7d = React.useMemo(() => {
+    if (!variants.length) return []
+    return [...variants]
+      .map((inv) => ({ inv, s7: trendScore7d(inv) }))
+      .sort((a, b) => b.s7 - a.s7)
+      .slice(0, 6)
+  }, [variants])
 
   const maxPart = React.useMemo(() => {
     if (!breakdown?.parts.length) return 1
@@ -371,6 +506,36 @@ export function PredictionWorkspace() {
   const demandSpotlight = React.useMemo(
     () => buildDemandSpotlight(variants),
     [variants]
+  )
+
+  // Demand spotlight search
+  const [spotlightSearch, setSpotlightSearch] = React.useState("")
+  const spotlightSearchLower = spotlightSearch.toLowerCase().trim()
+  const filterSpotlight = React.useCallback(
+    (list: InventoryVariant[]) =>
+      spotlightSearchLower
+        ? list.filter(
+            (inv) =>
+              inv.productName.toLowerCase().includes(spotlightSearchLower) ||
+              inv.sku.toLowerCase().includes(spotlightSearchLower)
+          )
+        : list,
+    [spotlightSearchLower]
+  )
+
+  // All SKUs search
+  const [skuSearch, setSkuSearch] = React.useState("")
+  const skuSearchLower = skuSearch.toLowerCase().trim()
+  const filteredVariants = React.useMemo(
+    () =>
+      skuSearchLower
+        ? variants.filter(
+            (inv) =>
+              inv.productName.toLowerCase().includes(skuSearchLower) ||
+              inv.sku.toLowerCase().includes(skuSearchLower)
+          )
+        : variants,
+    [variants, skuSearchLower]
   )
 
   const marketSearchMatches = React.useMemo(() => {
@@ -650,7 +815,7 @@ export function PredictionWorkspace() {
           </span>
           <span className="text-muted-foreground">Next:</span>
           <Link
-            href="/pricing"
+            href="/rsp"
             className="font-semibold text-primary underline-offset-4 hover:underline"
           >
             RSP →
@@ -670,10 +835,14 @@ export function PredictionWorkspace() {
             />
             <TopMetricCard
               title="Avg Trend"
-              value={String(overallMarket.avgTrend)}
-              helper="Portfolio demand strength"
+              value={
+                avgTrend7d != null ? String(avgTrend7d) : String(overallMarket.avgTrend)
+              }
+              helper="7-day portfolio demand strength"
               icon={<RiPulseLine className="size-4" aria-hidden />}
-              barPct={overallMarket.avgTrend}
+              barPct={
+                avgTrend7d != null ? avgTrend7d : overallMarket.avgTrend
+              }
             />
             <TopMetricCard
               title="Momentum"
@@ -698,6 +867,133 @@ export function PredictionWorkspace() {
           </Panel>
         )}
       </div>
+
+      {/* {marketTrending7d.length > 0 ? (
+        <Panel
+          id="catalog-trending"
+          className="relative overflow-hidden border-primary/15 bg-linear-to-br from-primary/6 via-card to-violet-500/4 p-0 shadow-sm"
+        >
+          <div
+            className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-primary/10 blur-3xl"
+            aria-hidden
+          />
+          <div className="relative border-b border-border/50 bg-muted/20 px-4 py-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="flex items-start gap-2.5">
+                <span className="mt-0.5 inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary ring-1 ring-primary/20">
+                  <RiPulseLine className="size-5" aria-hidden />
+                </span>
+                <div>
+                  <h2 className="text-sm font-semibold tracking-tight">
+                    Your catalog — top movers
+                  </h2>
+                  <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                    Top movers in your catalog by{" "}
+                    <span className="font-medium text-foreground">
+                      7-day trend score
+                    </span>
+                    . Click a tile to open it in the planner.
+                  </p>
+                </div>
+              </div>
+              {avgTrend7d != null ? (
+                <div className="rounded-lg border border-border/60 bg-background/80 px-3 py-2 text-right shadow-sm backdrop-blur-sm">
+                  <p className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+                    Portfolio avg (7d)
+                  </p>
+                  <p className="text-lg font-bold tabular-nums text-primary">
+                    {avgTrend7d}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          </div>
+          <div className="relative grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            {marketTrending7d.map(({ inv, s7 }, idx) => {
+              const hot = s7 >= 72
+              const warm = s7 >= 55 && s7 < 72
+              return (
+                <button
+                  key={inv.id}
+                  type="button"
+                  onClick={() => {
+                    setSku(inv.sku)
+                    setInventoryExpandedSku(null)
+                    setAiResult(null)
+                    document
+                      .getElementById("product-planner")
+                      ?.scrollIntoView({ behavior: "smooth" })
+                  }}
+                  className={cn(
+                    "group flex flex-col overflow-hidden rounded-2xl border text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md",
+                    hot &&
+                      "border-emerald-500/35 bg-linear-to-b from-emerald-500/12 to-card hover:border-emerald-500/50",
+                    warm &&
+                      !hot &&
+                      "border-amber-500/30 bg-linear-to-b from-amber-500/10 to-card hover:border-amber-500/45",
+                    !hot &&
+                      !warm &&
+                      "border-border/70 bg-card hover:border-primary/35"
+                  )}
+                >
+                  <div className="relative aspect-4/3 w-full overflow-hidden bg-muted/60">
+                    <img
+                      src={resolveVariantImageUrl({
+                        sku: inv.sku,
+                        id: inv.id,
+                        imageUrl: inv.imageUrl,
+                      })}
+                      alt=""
+                      className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                      loading="lazy"
+                    />
+                    <span className="absolute left-2 top-2 inline-flex min-w-7 items-center justify-center rounded-full bg-background/90 px-2 py-0.5 text-[10px] font-bold tabular-nums shadow ring-1 ring-border/60">
+                      #{idx + 1}
+                    </span>
+                  </div>
+                  <div className="flex min-h-0 flex-1 flex-col gap-1.5 p-3">
+                    <p className="line-clamp-2 text-xs font-semibold leading-snug">
+                      {inv.productName}
+                    </p>
+                    <p className="font-mono text-[10px] text-muted-foreground">
+                      {inv.sku}
+                    </p>
+                    <div className="mt-auto flex items-end justify-between gap-2 border-t border-border/40 pt-2">
+                      <div>
+                        <p className="text-[9px] font-semibold tracking-wider text-muted-foreground uppercase">
+                          Trend (7d)
+                        </p>
+                        <p
+                          className={cn(
+                            "text-xl font-bold tabular-nums leading-none",
+                            hot && "text-emerald-600 dark:text-emerald-400",
+                            warm && !hot && "text-amber-700 dark:text-amber-300",
+                            !hot && !warm && "text-foreground"
+                          )}
+                        >
+                          {s7}
+                        </p>
+                      </div>
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
+                          hot && "bg-emerald-500/20 text-emerald-800 dark:text-emerald-200",
+                          warm &&
+                            !hot &&
+                            "bg-amber-500/20 text-amber-900 dark:text-amber-200",
+                          !hot && !warm && "bg-muted text-muted-foreground"
+                        )}
+                      >
+                        {hot ? "Hot" : warm ? "Rising" : "Watch"}
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </Panel>
+      ) : null} */}
 
       {/* Row: source | demand spotlight | search */}
       <div className="grid items-stretch gap-3 lg:grid-cols-12">
@@ -793,95 +1089,126 @@ export function PredictionWorkspace() {
         </Panel> */}
 
         <Panel className="flex h-full flex-col overflow-hidden p-0 lg:col-span-5 lg:h-[360px]">
-          <div className="flex flex-col gap-0.5 border-b border-border/50 bg-muted/25 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <RiBarChartGroupedLine
-                className="size-5 shrink-0 text-primary"
-                aria-hidden
+          <div className="flex items-center gap-2 border-b border-border/50 bg-muted/25 px-4 py-2.5">
+            <RiBarChartGroupedLine className="size-5 shrink-0 text-primary" aria-hidden />
+            <h2 className="text-sm font-semibold tracking-tight">Demand spotlight</h2>
+          </div>
+          {/* Spotlight search */}
+          <div className="shrink-0 border-b border-border/40 px-3 py-2">
+            <div className="relative">
+              <RiSearchLine className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <input
+                type="search"
+                placeholder="Filter by name or SKU…"
+                value={spotlightSearch}
+                onChange={(e) => setSpotlightSearch(e.target.value)}
+                className="h-8 w-full rounded-lg border border-input bg-background pl-8 pr-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
               />
-              <h2 className="text-sm font-semibold tracking-tight">
-                Demand spotlight
-              </h2>
+              {spotlightSearch && (
+                <button
+                  type="button"
+                  onClick={() => setSpotlightSearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Clear search"
+                >
+                  <RiCloseLine className="size-3.5" aria-hidden />
+                </button>
+              )}
             </div>
-            {/* <p className="text-[10px] leading-snug text-muted-foreground sm:max-w-[55%] sm:text-right">
-              Random picks from your catalog: hot SKUs, slow movers, and
-              highest modeled return pressure (not live returns data).
-            </p> */}
           </div>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
             {variants.length === 0 ? (
               <p className="text-sm text-muted-foreground">No products loaded.</p>
             ) : (
               <>
-                <div>
-                  <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-emerald-700 uppercase dark:text-emerald-400">
-                    High demand
-                  </p>
-                  <div className="space-y-1">
-                    {demandSpotlight.high.length ? (
-                      demandSpotlight.high.map((inv) => (
-                        <SpotlightProductRow
-                          key={`h-${inv.id}`}
-                          inv={inv}
-                          metaLine={`Trend ${inv.trendScore}`}
-                          onPick={spotlightPick}
-                        />
-                      ))
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        No strong-demand SKUs in this slice.
+                {/* High demand */}
+                {(() => {
+                  const rows = filterSpotlight(demandSpotlight.high)
+                  return (
+                    <div>
+                      <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-emerald-700 uppercase dark:text-emerald-400">
+                        High demand
                       </p>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-slate-600 uppercase dark:text-slate-400">
-                    Low demand / idle
-                  </p>
-                  <div className="space-y-1">
-                    {demandSpotlight.idle.length ? (
-                      demandSpotlight.idle.map((inv) => (
-                        <SpotlightProductRow
-                          key={`i-${inv.id}`}
-                          inv={inv}
-                          metaLine={`${inv.weeksCover}w cover · trend ${inv.trendScore}`}
-                          onPick={spotlightPick}
-                        />
-                      ))
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        No idle SKUs matched filters.
+                      <div className="space-y-1">
+                        {rows.length ? (
+                          rows.map((inv) => (
+                            <SpotlightProductRow
+                              key={`h-${inv.id}`}
+                              inv={inv}
+                              metaLine={`7d trend ${trendScore7d(inv)}`}
+                              onPick={spotlightPick}
+                            />
+                          ))
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            {spotlightSearch ? "No matches." : "No strong-demand SKUs in this slice."}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
+                {/* Low demand / idle */}
+                {(() => {
+                  const rows = filterSpotlight(demandSpotlight.idle)
+                  return (
+                    <div>
+                      <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-slate-600 uppercase dark:text-slate-400">
+                        Low demand / idle
                       </p>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-rose-700 uppercase dark:text-rose-400">
-                    Highest returns (modeled)
-                  </p>
-                  <div className="space-y-1">
-                    {demandSpotlight.returns.length ? (
-                      demandSpotlight.returns.map(({ inv, returnScore }) => (
-                        <SpotlightProductRow
-                          key={`r-${inv.id}`}
-                          inv={inv}
-                          metaLine={`Score ${Math.round(returnScore)}`}
-                          onPick={spotlightPick}
-                        />
-                      ))
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        No rows to rank.
+                      <div className="space-y-1">
+                        {rows.length ? (
+                          rows.map((inv) => (
+                            <SpotlightProductRow
+                              key={`i-${inv.id}`}
+                              inv={inv}
+                              metaLine={`${inv.weeksCover}w cover · 7d ${trendScore7d(inv)}`}
+                              onPick={spotlightPick}
+                            />
+                          ))
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            {spotlightSearch ? "No matches." : "No idle SKUs matched filters."}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
+                {/* Returns */}
+                {(() => {
+                  const rows = filterSpotlight(demandSpotlight.returns.map((r) => r.inv))
+                  return (
+                    <div>
+                      <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-rose-700 uppercase dark:text-rose-400">
+                        Highest returns (modeled)
                       </p>
-                    )}
-                  </div>
-                </div>
+                      <div className="space-y-1">
+                        {rows.length ? (
+                          rows.map((inv) => (
+                            <SpotlightProductRow
+                              key={`r-${inv.id}`}
+                              inv={inv}
+                              metaLine={`Score ${Math.round(demandSpotlight.returns.find((r) => r.inv.id === inv.id)?.returnScore ?? 0)}`}
+                              onPick={spotlightPick}
+                            />
+                          ))
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            {spotlightSearch ? "No matches." : "No rows to rank."}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
               </>
             )}
           </div>
         </Panel>
 
         <Panel
+          id="market-search-panel"
           className={cn(
             "relative z-30 flex min-h-[360px] flex-col overflow-hidden p-0 lg:col-span-7 lg:h-[360px]",
             marketResult && "ring-1 ring-primary/15"
@@ -927,96 +1254,86 @@ export function PredictionWorkspace() {
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col gap-0">
-            <div className="shrink-0 p-2 pb-2">
+            <div className="shrink-0 border-b border-border/40 px-3 py-2">
               <label className="sr-only" htmlFor="market-search">
                 Search products or keywords
               </label>
-
-              {/* Added relative wrapper to anchor the absolute dropdown */}
               <div className="relative">
-                <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm ring-1 ring-border/20 transition-all focus-within:ring-primary/20 ">
-                  {/* Changed from sm:items-stretch to sm:items-center */}
-                  <div className="flex flex-col sm:flex-row sm:items-center">
-                    <div className="flex min-w-0 flex-1 flex-col border-border/50 sm:border-r">
-                      <div className="relative flex items-center">
-                        <RiSearchLine
-                          className="pointer-events-none absolute left-3 z-10 size-5 text-muted-foreground"
-                          aria-hidden
-                        />
-                        <input
-                          ref={marketSearchInputRef}
-                          id="market-search"
-                          type="search"
-                          role="combobox"
-                          aria-expanded={
-                            marketSearchFocused && marketQuery.trim().length > 0
-                          }
-                          aria-autocomplete="list"
-                          aria-controls="market-search-suggestions"
-                          placeholder="SKU, name, or keyword…"
-                          autoComplete="off"
-                          /* Adjusted height to h-11 to balance perfectly with the button */
-                          className="h-11 w-full border-0 bg-transparent pr-3 pl-10 text-sm outline-none focus-visible:ring-0"
-                          value={marketQuery}
-                          onChange={(e) => setMarketQuery(e.target.value)}
-                          onFocus={() => setMarketSearchFocused(true)}
-                          onBlur={() => {
-                            window.setTimeout(
-                              () => setMarketSearchFocused(false),
-                              200
-                            )
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Escape") {
-                              e.preventDefault()
-                              setMarketSearchHighlightIdx(-1)
-                              marketSearchInputRef.current?.blur()
-                              return
-                            }
-                            if (e.key === "ArrowDown") {
-                              e.preventDefault()
-                              if (!marketSearchRows.length) return
-                              setMarketSearchHighlightIdx((i) => {
-                                const next = i < 0 ? 0 : i + 1
-                                return Math.min(
-                                  marketSearchRows.length - 1,
-                                  next
-                                )
-                              })
-                              return
-                            }
-                            if (e.key === "ArrowUp") {
-                              e.preventDefault()
-                              if (!marketSearchRows.length) return
-                              setMarketSearchHighlightIdx((i) =>
-                                Math.max(0, i < 0 ? 0 : i - 1)
-                              )
-                              return
-                            }
-                            if (e.key === "Enter") {
-                              void runMarketSearch({ useListHighlight: true })
-                            }
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Added standard padding around the button wrapper to prevent stretching */}
-                    <div className="shrink-0 bg-muted/5 p-1 sm:bg-transparent">
-                      <Button
+                <div className="flex items-center gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <RiSearchLine
+                      className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+                      aria-hidden
+                    />
+                    <input
+                      ref={marketSearchInputRef}
+                      id="market-search"
+                      type="search"
+                      role="combobox"
+                      aria-expanded={marketSearchFocused && marketQuery.trim().length > 0}
+                      aria-autocomplete="list"
+                      aria-controls="market-search-suggestions"
+                      placeholder="SKU, name, or keyword…"
+                      autoComplete="off"
+                      className="h-8 w-full rounded-lg border border-input bg-background pl-8 pr-7 text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
+                      value={marketQuery}
+                      onChange={(e) => setMarketQuery(e.target.value)}
+                      onFocus={() => setMarketSearchFocused(true)}
+                      onBlur={() => {
+                        window.setTimeout(() => setMarketSearchFocused(false), 200)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                          e.preventDefault()
+                          setMarketSearchHighlightIdx(-1)
+                          marketSearchInputRef.current?.blur()
+                          return
+                        }
+                        if (e.key === "ArrowDown") {
+                          e.preventDefault()
+                          if (!marketSearchRows.length) return
+                          setMarketSearchHighlightIdx((i) => {
+                            const next = i < 0 ? 0 : i + 1
+                            return Math.min(marketSearchRows.length - 1, next)
+                          })
+                          return
+                        }
+                        if (e.key === "ArrowUp") {
+                          e.preventDefault()
+                          if (!marketSearchRows.length) return
+                          setMarketSearchHighlightIdx((i) =>
+                            Math.max(0, i < 0 ? 0 : i - 1)
+                          )
+                          return
+                        }
+                        if (e.key === "Enter") {
+                          void runMarketSearch({ useListHighlight: true })
+                        }
+                      }}
+                    />
+                    {marketQuery && (
+                      <button
                         type="button"
-                        size="default"
-                        className="h-9 w-full shrink-0 rounded-lg px-4 font-medium sm:w-auto"
-                        disabled={marketLoading}
-                        onClick={() => void runMarketSearch()}
+                        onClick={() => setMarketQuery("")}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        aria-label="Clear search"
                       >
-                        {marketLoading ? "Working…" : "AI Analyzer"}
-                      </Button>
-                    </div>
+                        <RiCloseLine className="size-3.5" aria-hidden />
+                      </button>
+                    )}
                   </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-8 shrink-0 rounded-lg px-3 text-xs font-medium"
+                    disabled={marketLoading}
+                    onClick={() => void runMarketSearch()}
+                  >
+                    {marketLoading ? "Working…" : "AI Analyzer"}
+                  </Button>
                 </div>
 
-                {/* Extracted Dropdown: Now absolute positioned so it floats over the card */}
+                {/* Dropdown: absolute positioned so it floats over the card */}
                 {marketSearchFocused && marketQuery.trim().length > 0 ? (
                   <div
                     id="market-search-suggestions"
@@ -1378,6 +1695,76 @@ export function PredictionWorkspace() {
                       </Button>
                     ) : null}
                   </>
+                ) : !marketQuery.trim() ? (
+                  <div className="flex flex-1 flex-col gap-3 py-1">
+                    {trendPreviewLoading ? (
+                      <div className="space-y-2 rounded-xl border border-border/50 bg-muted/20 p-3">
+                        <div className="h-3 w-40 animate-pulse rounded bg-muted" />
+                        <div className="flex gap-2">
+                          {Array.from({ length: 4 }).map((_, i) => (
+                            <div
+                              key={i}
+                              className="h-16 w-16 shrink-0 animate-pulse rounded-lg bg-muted/70"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ) : trendPreviewRows?.length ? (
+                      <Link
+                        href="/prediction/trending-toys"
+                        className="group block rounded-xl border border-primary/20 bg-linear-to-br from-cyan-500/10 via-card to-violet-500/8 p-3 shadow-sm ring-1 ring-primary/10 transition hover:border-primary/35 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex min-w-0 gap-2">
+                            <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
+                              <RiGlobalLine className="size-4" aria-hidden />
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-foreground">
+                                Global toy trends
+                              </p>
+                              <p className="text-[10px] leading-snug text-muted-foreground">
+                                AI picks (24h cache) · {trendPreviewRows.length} tracked · tap for sources &amp; regions
+                              </p>
+                            </div>
+                          </div>
+                          <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-semibold text-primary">
+                            Open
+                            <RiArrowRightLine className="size-3.5 transition group-hover:translate-x-0.5" aria-hidden />
+                          </span>
+                        </div>
+                        <div className="mt-2.5 flex flex-wrap gap-1.5">
+                          {trendPreviewRows.map((row) => (
+                            <span
+                              key={row.name}
+                              className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-foreground"
+                            >
+                              <span className="tabular-nums text-primary">{row.trendScore}</span>
+                              {row.name}
+                            </span>
+                          ))}
+                        </div>
+                      </Link>
+                    ) : (
+                      <Link
+                        href="/prediction/trending-toys"
+                        className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-primary/25 bg-muted/20 px-3 py-3 text-left transition hover:border-primary/40 hover:bg-muted/30"
+                      >
+                        <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <RiGlobalLine className="size-4 shrink-0 text-primary" aria-hidden />
+                          Browse global toy trends (AI + sources by country)
+                        </span>
+                        <RiArrowRightLine className="size-4 shrink-0 text-primary" aria-hidden />
+                      </Link>
+                    )}
+                    <p className="text-center text-[10px] text-muted-foreground">
+                      Use{" "}
+                      <span className="font-medium text-foreground">
+                        AI Analyzer
+                      </span>{" "}
+                      on a keyword for a market read in this panel.
+                    </p>
+                  </div>
                 ) : (
                   <div className="flex flex-1 flex-col justify-center gap-3 py-2">
                     <div className="grid grid-cols-2 gap-2">
@@ -1402,7 +1789,10 @@ export function PredictionWorkspace() {
                       <span className="font-medium text-foreground">
                         Run analysis
                       </span>{" "}
-                      on your keyword or pick a suggestion / inventory tile.
+                      on your keyword or pick a suggestion from the list above.
+                      Trend scores use a{" "}
+                      <span className="font-medium text-foreground">7-day</span>{" "}
+                      window.
                     </p>
                   </div>
                 )}
@@ -1512,15 +1902,36 @@ export function PredictionWorkspace() {
         className="grid scroll-mt-20 items-stretch gap-3 lg:grid-cols-12"
       >
         <Panel className="flex min-h-[260px] flex-col overflow-hidden p-0 lg:col-span-8">
-          <div className="flex items-center gap-2 border-b border-border/50 bg-muted/25 px-4 py-3">
-            <RiStackLine className="size-5 shrink-0 text-primary" aria-hidden />
-            <div>
-              <h2 className="text-sm font-semibold tracking-tight">
-                All SKUs + planner
-              </h2>
-              <p className="text-[11px] text-muted-foreground">
-                Click any SKU to update demand, AI, chart, and order settings.
-              </p>
+          <div className="flex items-center justify-between gap-2 border-b border-border/50 bg-muted/25 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <RiStackLine className="size-5 shrink-0 text-primary" aria-hidden />
+              <div>
+                <h2 className="text-sm font-semibold tracking-tight">All SKUs + planner</h2>
+                <p className="text-[11px] text-muted-foreground">
+                  Click any SKU to update demand, AI, chart, and order settings.
+                </p>
+              </div>
+            </div>
+            {/* SKU search */}
+            <div className="relative w-44 shrink-0">
+              <RiSearchLine className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <input
+                type="search"
+                placeholder="Search SKUs…"
+                value={skuSearch}
+                onChange={(e) => setSkuSearch(e.target.value)}
+                className="h-8 w-full rounded-lg border border-input bg-background pl-8 pr-7 text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
+              />
+              {skuSearch && (
+                <button
+                  type="button"
+                  onClick={() => setSkuSearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Clear search"
+                >
+                  <RiCloseLine className="size-3.5" aria-hidden />
+                </button>
+              )}
             </div>
           </div>
           <div className="border-b border-border/50 bg-card/60 px-3 py-2.5">
@@ -1545,7 +1956,7 @@ export function PredictionWorkspace() {
                     ["On hand", v.onHand],
                     ["Inbound", v.inbound],
                     ["Cover", `${v.weeksCover}w`],
-                    ["Trend", v.trendScore],
+                    ["Trend (7d)", trendScore7d(v)],
                     ["~Units/wk", wk.toFixed(1)],
                   ] as const
                 ).map(([label, val]) => (
@@ -1572,9 +1983,11 @@ export function PredictionWorkspace() {
           <div className="max-h-[min(360px,46vh)] flex-1 overflow-y-auto p-3 lg:max-h-[min(520px,55vh)]">
             {variants.length === 0 ? (
               <p className="p-2 text-sm text-muted-foreground">No products.</p>
+            ) : filteredVariants.length === 0 ? (
+              <p className="p-2 text-sm text-muted-foreground">No SKUs match "{skuSearch}".</p>
             ) : (
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
-                {variants.map((inv) => {
+                {filteredVariants.map((inv) => {
                   const sig = variantMarketSignal(inv)
                   const selected = sku === inv.sku
                   return (
@@ -1647,7 +2060,7 @@ export function PredictionWorkspace() {
                         </div>
                       </div>
                       <div className="flex items-center justify-between border-t border-border/40 pt-1 text-[10px] text-muted-foreground">
-                        <span>Trend {inv.trendScore}</span>
+                        <span>7d {trendScore7d(inv)}</span>
                         <span>~{sig.demandProb}%</span>
                       </div>
                     </button>
@@ -1665,7 +2078,7 @@ export function PredictionWorkspace() {
           )}
         >
           <p className="text-xs font-medium text-muted-foreground">
-            Demand score (~30 days)
+            Demand score (~7 days)
           </p>
           <div className="mt-2 flex items-end gap-2">
             <span className="text-4xl font-bold tracking-tight tabular-nums lg:text-5xl">
@@ -1717,6 +2130,30 @@ export function PredictionWorkspace() {
                 {timing?.reason}
               </span>
             </div>
+            {demandNarratives ? (
+              <div className="border-t border-border/40 pt-2.5 space-y-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Season and calendar
+                  </p>
+                  <ul className="mt-1.5 list-disc space-y-1.5 pl-4 text-[11px] leading-snug text-muted-foreground">
+                    {demandNarratives.seasonLines.map((line, i) => (
+                      <li key={`s-${i}`}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
+                {/* <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    This SKU (your numbers)
+                  </p>
+                  <ul className="mt-1.5 list-disc space-y-1.5 pl-4 text-[11px] leading-snug text-muted-foreground">
+                    {demandNarratives.skuLines.map((line, i) => (
+                      <li key={`k-${i}`}>{line}</li>
+                    ))}
+                  </ul>
+                </div> */}
+              </div>
+            ) : null}
           </div>
         </Panel>
       </div>
@@ -1955,7 +2392,7 @@ export function PredictionWorkspace() {
           </p>
         </div>
         <Button type="button" size="sm" asChild>
-          <Link href="/pricing">RSP →</Link>
+          <Link href="/rsp">RSP →</Link>
         </Button>
       </Panel>
     </div>

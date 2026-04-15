@@ -31,7 +31,7 @@ const PIPELINE = [
     step: 2,
     title: "RSP",
     desc: "Enter base cost → review shelf scenarios and margins. Approve a price when ready.",
-    href: "/pricing",
+    href: "/rsp",
     status: "navigate",
     icon: "💰",
   },
@@ -305,7 +305,7 @@ export function WorkflowWorkspace() {
         </div>
         {approvals.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No prices approved yet. Go to <Link href="/pricing" className="text-primary hover:underline">RSP</Link> → Approve a price.
+            No prices approved yet. Go to <Link href="/rsp" className="text-primary hover:underline">RSP</Link> → Approve a price.
           </p>
         ) : (
           <ul className="space-y-2">

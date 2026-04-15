@@ -1,8 +1,16 @@
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
+export type OpenRouterChatOptions = {
+  /** Overrides OPENROUTER_MODEL when set. */
+  model?: string
+  temperature?: number
+  maxTokens?: number
+}
+
 export async function openRouterChat(
   userPrompt: string,
-  systemPrompt: string
+  systemPrompt: string,
+  options?: OpenRouterChatOptions
 ): Promise<string> {
   const key = (process.env.OPENROUTER_API_KEY ?? "").trim()
   if (!key) {
@@ -10,6 +18,7 @@ export async function openRouterChat(
   }
 
   const model =
+    options?.model?.trim() ||
     (process.env.OPENROUTER_MODEL ?? "openai/gpt-4o-mini").trim() ||
     "openai/gpt-4o-mini"
 
@@ -26,8 +35,8 @@ export async function openRouterChat(
     },
     body: JSON.stringify({
       model,
-      temperature: 0.35,
-      max_tokens: 1400,
+      temperature: options?.temperature ?? 0.35,
+      max_tokens: options?.maxTokens ?? 1400,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },

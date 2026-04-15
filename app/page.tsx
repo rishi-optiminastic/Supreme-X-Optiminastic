@@ -20,7 +20,7 @@ const tools = [
     step: 1,
   },
   {
-    href: "/pricing",
+    href: "/rsp",
     title: "RSP",
     body: "Shelf pricing from landed cost: penetration, competitive, and premium scenarios with margin breakdown and reasoning.",
     Icon: RiPriceTag3Line,
@@ -39,8 +39,8 @@ const tools = [
   },
   {
     href: "/stock-health",
-    title: "Inventory",
-    body: "Health segments per SKU, tied-up capital hints, table export—and a PO Excel upload to match lines to the catalog and sellable stock.",
+    title: "PO",
+    body: "Upload a PO workbook to match lines to the catalog and sellable stock, plus SKU health segments, capital hints, and table export.",
     Icon: RiStackLine,
     accent: "text-amber-600 dark:text-amber-400",
     bg: "bg-amber-500/10",
@@ -78,7 +78,7 @@ export default function HomePage() {
           "Trends",
           "RSP",
           "Order creation",
-          "Inventory",
+          "PO",
           "Sales ideas",
         ].map((label, i) => (
           <span key={label} className="flex items-center gap-1.5 text-xs">

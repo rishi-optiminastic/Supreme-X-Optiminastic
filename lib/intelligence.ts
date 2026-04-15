@@ -1,5 +1,5 @@
 import type { InventoryVariant } from "@/lib/inventory-types"
-import { reorderRows, weeklyDemand } from "@/lib/planning-math"
+import { reorderBreakdown, reorderRows, weeklyDemand } from "@/lib/planning-math"
 
 /** User-tunable extra demand (0 = off, 100 = strong). */
 export type ExternalSignals = {
@@ -128,6 +128,147 @@ export function demandProbabilityBreakdown(
   const bandHigh = Math.min(94, Math.round(rawBeforeClamp + spread))
 
   return { total, bandLow, bandHigh, parts, rawBeforeClamp }
+}
+
+/** Plain-language reasons for the demand card: calendar season + SKU facts. */
+export type DemandNarrativeGroups = {
+  seasonLines: string[]
+  skuLines: string[]
+}
+
+function catalogSeasonLine(v: InventoryVariant): string | null {
+  const t = `${v.productName} ${v.attributes}`.toLowerCase()
+  if (
+    /christmas|xmas|santa|holiday|advent|nutcracker|ornament|snowflake|reindeer|noel|nativity/.test(
+      t
+    )
+  ) {
+    return `${v.productName} reads gift- and winter-holiday-heavy: demand usually concentrates in Q4, so off-peak months lean more on stock weeks, trend, and your sliders than on seasonal lift.`
+  }
+  if (/halloween|spooky|pumpkin|costume|trick|haunted|witch|skeleton/.test(t)) {
+    return `${v.productName} looks Halloween-adjacent: most channels spike late September through October; other months are quieter unless you clearance or ship early.`
+  }
+  if (/summer|beach|pool|water|splash|sand|sun|inflatable|swim|sprinkler/.test(t)) {
+    return `${v.productName} reads summer / outdoor: strongest sell-through is often May–August in temperate markets; shoulder months depend more on weather and promos.`
+  }
+  if (/back\s*to\s*school|school|backpack|lunch\s*box|notebook|study|classroom|eraser|pencil\b/.test(t)) {
+    return `${v.productName} reads back-to-school: typical lift runs late July through September depending on region and retailer buy calendars.`
+  }
+  if (/bike|bicycle|scooter|skate|kickboard|helmet\b|sport\b|soccer|football\b|basketball/.test(t)) {
+    return `${v.productName} reads ride-on or sports: warmer months usually help; winter is slower except around gifting unless you indoor-pitch.`
+  }
+  if (/chair|desk|office|furniture|ergo|furn-|shelf|table\b|cabinet/.test(t)) {
+    return `${v.productName} reads home or office furniture: demand is steadier year-round, with a modest Q4 gifting bump and January refresh in many markets.`
+  }
+  if (/doll|plush|stuffed|action figure|lego|puzzle|board game|rc car|nerf/.test(t)) {
+    return `${v.productName} reads classic toy assortment: Q4 is the big peak, but birthdays and mid-year movie tie-ins can move units any month.`
+  }
+  return null
+}
+
+function retailCalendarLine(at: Date): string {
+  const long = at.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  })
+  const m = at.getMonth()
+  const d = at.getDate()
+  switch (m) {
+    case 0:
+      return `As of ${long}: post-holiday retail. Broad toy demand is softer; buyers focus on clearance, cash flow, and early-year resets rather than seasonal peaks.`
+    case 1:
+      return `As of ${long}: still a low seasonal tide for mass-market toys. Late February can see the first spring outdoor previews in some chains.`
+    case 2:
+      return `As of ${long}: spring shelf work and Easter-adjacent gifting (dates vary) start shifting attention to outdoor and novelty lines.`
+    case 3:
+      return `As of ${long}: spring restock window. Summer and outdoor assortments get firmer orders ahead of May and school breaks in many regions.`
+    case 4:
+      return `As of ${long}: late spring build. Outdoor, travel, and “summer play” sets usually accelerate before June holidays.`
+    case 5:
+      return `As of ${long}: early summer. Warm-weather and outdoor categories are in their natural high season in the northern hemisphere.`
+    case 6:
+      return `As of ${long}: mid-summer peak for pools, outdoor toys, and travel retail in many markets; back-to-school planning starts for buyers.`
+    case 7:
+      return `As of ${long}: late summer. Clearance meets early back-to-school sets; seasonal mix shifts quickly by channel.`
+    case 8:
+      return `As of ${long}: back-to-school is live for many families and retailers; indoor learning and lunch gear often peaks now.`
+    case 9:
+      return `As of ${long}: early autumn. Halloween and harvest themes ramp; holiday inbound planning intensifies for November receipts.`
+    case 10:
+      return d < 12
+        ? `As of ${long}: Halloween build phase; costume and décor SKUs accelerate before month-end. Holiday inbound is already on planners’ minds.`
+        : `As of ${long}: late Halloween into early holiday set-up. Seasonal spikes are concentrated; non-seasonal SKUs lean on inventory math.`
+    case 11:
+      return d < 15
+        ? `As of ${long}: core holiday selling window. Giftable items and impulse toys see the strongest natural demand of the year.`
+        : `As of ${long}: peak gifting crunch. In-stock position and ship dates matter more than long-range trend for many SKUs.`
+    default:
+      return `As of ${long}: calendar context is blended into how we talk about seasonality versus inventory and trend signals.`
+  }
+}
+
+/**
+ * Human-readable demand reasons: retail calendar, inferred catalog seasonality,
+ * and concrete numbers (stock, reorder math, history, sliders).
+ */
+export function demandScoreNarrativeReasons(params: {
+  v: InventoryVariant
+  external: ExternalSignals
+  regionHeat: number
+  categoryHeat: number
+  leadW: number
+  safetyW: number
+  targetW: number
+  at?: Date
+}): DemandNarrativeGroups {
+  const {
+    v,
+    external,
+    regionHeat,
+    categoryHeat,
+    leadW,
+    safetyW,
+    targetW,
+  } = params
+  const at = params.at ?? new Date()
+  const w = weeklyDemand(v)
+  const wRound = Math.round(w * 10) / 10
+  const coverR = Math.round(v.weeksCover * 10) / 10
+  const rb = reorderBreakdown(v, leadW, safetyW, targetW)
+  const demandWeeks = targetW + leadW + safetyW
+
+  const seasonLines: string[] = [retailCalendarLine(at)]
+  const cat = catalogSeasonLine(v)
+  if (cat) seasonLines.push(cat)
+  else {
+    seasonLines.push(
+      `${v.productName}: nothing in the name screams a sharp single-season spike, so the score leans on trend, weeks of cover, history (if present), and your slider settings.`
+    )
+  }
+
+  const skuLines: string[] = [
+    `Stock: ${v.onHand} on hand + ${v.inbound} inbound → about ${coverR} weeks cover at ~${wRound} units/week (from on-hand ÷ weeks of cover).`,
+    `Reorder math: ${targetW}w target + ${leadW}w lead + ${safetyW}w safety = ${demandWeeks} demand-weeks of flow. Pipeline target ~${Math.round(rb.targetUnits)} units vs ${rb.available} available → ${rb.suggestQty} units suggested.`,
+  ]
+
+  if (v.salesQty90d != null && v.salesQty90d > 0) {
+    skuLines.push(
+      `Recent velocity: ${v.salesQty90d} units in roughly the last 90 days (from Odoo) supports a stronger demand read when blended into the model.`
+    )
+  } else {
+    skuLines.push(
+      `Recent velocity: no 90-day sales total on this row yet, so the model does not get an extra lift from shipped history until Odoo data is linked.`
+    )
+  }
+
+  const extAvg =
+    (external.googleTrends + external.marketplace + external.social) / 3
+  skuLines.push(
+    `Your demand sliders: search ${external.googleTrends}%, marketplaces ${external.marketplace}%, social ${external.social}% (average ${Math.round(extAvg)}%); region heat ${regionHeat}% and category heat ${categoryHeat}% are also folded in.`
+  )
+
+  return { seasonLines, skuLines }
 }
 
 export function suggestedReorderQty(

@@ -13,6 +13,8 @@ export type RetailerOrderProfile = {
   name: string
   createdAtIso: string
   template: StoredTemplateFile | null
+  /** When true and template is null, filled exports use the built-in master workbook in /public. */
+  useDefaultMasterSheet?: boolean
 }
 
 export type RetailerTemplatesState = {
