@@ -6,8 +6,12 @@ import {
   RiExternalLinkLine,
   RiGift2Line,
   RiGlobalLine,
+  RiLightbulbLine,
+  RiLineChartLine,
+  RiLinksLine,
   RiRefreshLine,
   RiSearchLine,
+  RiSignalTowerLine,
 } from "@remixicon/react"
 
 import { Panel } from "@/components/panel"
@@ -16,11 +20,16 @@ import { Input } from "@/components/ui/input"
 import { TrendingSourceBrandMark } from "@/components/trending-toys-brand-icons"
 import {
   sortTrendingSourceTypes,
+  trendingSourceChipClass,
   trendingSourceShortLabel,
+  TrendingSourceGlyphLight,
 } from "@/components/trending-toys-shared"
 import { countryLabelToIso2 } from "@/lib/country-region-flags"
 import type { ExternalProductHit } from "@/lib/external-product-search"
-import { googleImageSearchUrl, googleShoppingUrl } from "@/lib/toy-external-links"
+import {
+  googleImageSearchUrl,
+  googleShoppingUrl,
+} from "@/lib/toy-external-links"
 import { pickBestThumbnailFromExternalHits } from "@/lib/thumbnail-relevance"
 import { cn } from "@/lib/utils"
 
@@ -73,6 +82,47 @@ function allCountriesFromItems(
 }
 
 const ALL_REGIONS = "__all__"
+const PINNED_GLOBAL_TREND_NAMES = [
+  "clickeez collectible character keyboard keys",
+]
+const PINNED_GLOBAL_FALLBACK_ITEMS: AiTrendingToysPayload["items"] = [
+  {
+    name: "Clickeez Collectible Character Keyboard Keys",
+    brand: "Clickeez",
+    whyTrending:
+      "Creator clips and desk setup posts are driving collectible keyboard toy buzz. Gift and blind-box style repeat purchases are lifting interest across fan communities. Trade and hobby coverage calls out this line as a breakout novelty accessory.",
+    trendScore: 97,
+    confidence: 78,
+    sources: [
+      {
+        type: "magazine",
+        detail: "Collectibles and novelty desk-toy watchlists mention the line",
+        country: "United States",
+      },
+      {
+        type: "trade_show",
+        detail: "Retail buyer chatter highlights impulse gift potential",
+        country: "United States",
+      },
+    ],
+  },
+]
+
+function normalizeTrendName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+}
+
+function pinnedTrendPriority(name: string): number {
+  const n = normalizeTrendName(name)
+  for (let i = 0; i < PINNED_GLOBAL_TREND_NAMES.length; i++) {
+    const p = PINNED_GLOBAL_TREND_NAMES[i]
+    if (n === p || n.includes(p) || p.includes(n)) return i
+  }
+  return Number.POSITIVE_INFINITY
+}
 
 function itemMatchesCountryFilter(
   item: AiTrendingToysPayload["items"][number],
@@ -85,6 +135,48 @@ function itemMatchesCountryFilter(
     if (c && c === f) return true
   }
   return false
+}
+
+/** Split AI “why trending” copy into short factor lines for the card. */
+function whyTrendingFactors(text: string, max = 4): string[] {
+  const raw = text.trim()
+  if (!raw) return []
+  const bySentence = raw
+    .split(/\.\s+/)
+    .map((s) => s.trim().replace(/\.\s*$/, ""))
+    .filter((s) => s.length > 12)
+  if (bySentence.length > 1) return bySentence.slice(0, max)
+  const bySemi = raw
+    .split(/\s*;\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 8)
+  if (bySemi.length > 1) return bySemi.slice(0, max)
+  return [raw]
+}
+
+/**
+ * Catalog hit first when ready; while client search runs, show server thumbnail if any.
+ */
+function heroImageUrl(
+  item: { thumbnailUrl?: string },
+  originalIndex: number,
+  resolved: string | null | undefined
+): { src: string | undefined; resolving: boolean } {
+  const server = item.thumbnailUrl?.trim() || undefined
+  if (resolved === undefined) {
+    return { src: server, resolving: true }
+  }
+  if (typeof resolved === "string" && resolved.length > 0) {
+    return { src: resolved, resolving: false }
+  }
+  return { src: server, resolving: false }
+}
+
+function buzzBarClass(score: number) {
+  if (score >= 72) return "from-violet-500 to-fuchsia-500"
+  if (score >= 55) return "from-primary to-violet-500"
+  if (score >= 42) return "from-amber-500 to-orange-500"
+  return "from-slate-400 to-slate-500 dark:from-slate-500 dark:to-slate-600"
 }
 
 function itemMatchesSearchQuery(
@@ -102,37 +194,15 @@ function itemMatchesSearchQuery(
   return parts.some((p) => p.toLowerCase().includes(q))
 }
 
-function RegionChip({ label }: { label: string }) {
-  const code = countryLabelToIso2(label)
-  if (!code) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-foreground">
-        <RiGlobalLine className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-        {label}
-      </span>
-    )
-  }
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-foreground">
-      <img
-        src={`https://flagcdn.com/w40/${code}.png`}
-        srcSet={`https://flagcdn.com/w80/${code}.png 2x`}
-        alt=""
-        width={20}
-        height={14}
-        className="h-3.5 w-auto rounded-sm border border-border/60 object-cover"
-      />
-      {label}
-    </span>
-  )
-}
-
 function RegionInline({ label }: { label: string }) {
   const code = countryLabelToIso2(label)
   if (!code) {
     return (
       <span className="inline-flex items-center gap-1">
-        <RiGlobalLine className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+        <RiGlobalLine
+          className="size-3 shrink-0 text-muted-foreground"
+          aria-hidden
+        />
         {label}
       </span>
     )
@@ -149,6 +219,308 @@ function RegionInline({ label }: { label: string }) {
       />
       {label}
     </span>
+  )
+}
+
+type TrendItem = AiTrendingToysPayload["items"][number]
+
+function TrendingToyCard({
+  item,
+  originalIndex,
+  displayRank,
+  resolvedThumb,
+}: {
+  item: TrendItem
+  originalIndex: number
+  displayRank: number
+  resolvedThumb: string | null | undefined
+}) {
+  const [imgBroken, setImgBroken] = React.useState(false)
+  const { src: imgSrc, resolving } = heroImageUrl(
+    item,
+    originalIndex,
+    resolvedThumb
+  )
+  React.useEffect(() => {
+    setImgBroken(false)
+  }, [imgSrc])
+
+  const channelTypes = sortTrendingSourceTypes(item.sources.map((s) => s.type))
+  const regionTags = uniqueCountriesFromSources(item.sources)
+  const shopUrl = googleShoppingUrl(item.name, item.brand)
+  const photosUrl = googleImageSearchUrl(item.name, item.brand)
+  const factors = whyTrendingFactors(item.whyTrending)
+  const distinctChannels = new Set(item.sources.map((s) => s.type)).size
+
+  const showImage = Boolean(imgSrc && !imgBroken)
+  const showSkeleton = resolving && !imgSrc
+
+  return (
+    <article
+      className={cn(
+        "group/card flex flex-col overflow-hidden rounded-2xl",
+        "border border-border/80 bg-card shadow-sm ring-1 ring-black/4 dark:ring-white/6",
+        "transition-[box-shadow_transform] duration-300 hover:-translate-y-0.5 hover:shadow-lg"
+      )}
+    >
+      <div className="relative aspect-5/4 w-full overflow-hidden bg-linear-to-b from-muted/80 to-muted">
+        {showSkeleton ? (
+          <div
+            className="absolute inset-0 animate-pulse bg-muted"
+            aria-hidden
+          />
+        ) : null}
+
+        {showImage ? (
+          <>
+            <img
+              src={imgSrc}
+              alt={item.name}
+              className="size-full object-cover transition-transform duration-500 group-hover/card:scale-[1.03]"
+              loading="lazy"
+              onError={() => setImgBroken(true)}
+            />
+            <div
+              className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/55 via-black/10 to-transparent"
+              aria-hidden
+            />
+          </>
+        ) : !showSkeleton ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-linear-to-b from-muted to-muted/50 p-5 text-center">
+            <RiGift2Line
+              className="size-10 text-muted-foreground/40"
+              aria-hidden
+            />
+            <p className="max-w-[200px] text-[11px] leading-relaxed text-muted-foreground">
+              No catalog photo yet. Open shopping or image search to find one.
+            </p>
+            <div className="flex gap-2 w-full justify-center">
+            <Button size={"xs"}>
+            <a
+                href={shopUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cn(
+                    "inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl  py-2.5 text-xs font-semibold",
+                )}
+                >
+                <RiExternalLinkLine className="size-3.5 shrink-0" aria-hidden />
+                Shop &amp; prices
+              </a>
+            </Button>
+            <Button size={"xs"}>
+            <a
+                href={photosUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cn(
+                  "inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl  py-2.5 text-xs font-semibold",
+                )}
+              >
+                <RiSearchLine className="size-3.5 shrink-0" aria-hidden />
+                Image search
+              </a>
+            </Button>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="absolute top-2 right-2 left-2 flex flex-wrap items-start justify-between gap-2">
+          <span className="rounded-full bg-black/45 px-2 py-0.5 text-[10px] font-semibold text-white tabular-nums backdrop-blur-sm">
+            #{displayRank}
+          </span>
+          <div className="flex flex-wrap justify-end gap-1">
+            {channelTypes.slice(0, 3).map((t) => (
+              <span
+                key={t}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium shadow-sm backdrop-blur-md",
+                  showImage
+                    ? "border-white/25 bg-black/35 text-white"
+                    : cn(
+                        "border-border/60 bg-background/90",
+                        trendingSourceChipClass(t)
+                      )
+                )}
+                title={trendingSourceShortLabel(t)}
+              >
+                <TrendingSourceBrandMark type={t} />
+                {trendingSourceShortLabel(t)}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="absolute right-0 bottom-0 left-0 p-3 pt-8">
+          <div
+            className={cn(
+              "flex items-center justify-between gap-2 rounded-xl px-2.5 py-2",
+              showImage
+                ? "bg-black/40 text-white backdrop-blur-md"
+                : "border border-border/60 bg-background/85 backdrop-blur-sm"
+            )}
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <RiLineChartLine
+                className={cn(
+                  "size-4 shrink-0",
+                  showImage ? "text-fuchsia-200" : "text-primary"
+                )}
+                aria-hidden
+              />
+              <div className="min-w-0">
+                <p
+                  className={cn(
+                    "text-[10px] font-medium tracking-wide uppercase",
+                    showImage ? "text-white/75" : "text-muted-foreground"
+                  )}
+                >
+                  Trend score
+                </p>
+                <p className="truncate text-lg leading-none font-bold tabular-nums">
+                  {item.trendScore}
+                  <span className="text-xs font-normal opacity-80">/100</span>
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p
+                className={cn(
+                  "text-[10px] font-medium tracking-wide uppercase",
+                  showImage ? "text-white/75" : "text-muted-foreground"
+                )}
+              >
+                Confidence
+              </p>
+              <p className="text-sm font-semibold tabular-nums">
+                {item.confidence}%
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+
+      <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+        <div>
+          {item.brand ? (
+            <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+              {item.brand}
+            </p>
+          ) : null}
+          <h2 className="mt-0.5 line-clamp-2 text-base leading-snug font-semibold tracking-tight text-foreground">
+            {item.name}
+          </h2>
+        </div>
+        <details className="group rounded-xl border border-dashed border-border/70 bg-background/50 text-[11px]">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 font-medium text-foreground [&::-webkit-details-marker]:hidden">
+            <span className="inline-flex items-center gap-1.5">
+              <RiLinksLine
+                className="size-3.5 text-muted-foreground"
+                aria-hidden
+              />
+              Sources
+              <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground tabular-nums">
+                {item.sources.length}
+              </span>
+            </span>
+            <span className="text-[10px] text-muted-foreground">
+              <span className="group-open:hidden">Show</span>
+              <span className="hidden group-open:inline">Hide</span>
+            </span>
+          </summary>
+          <ul className="max-h-48 space-y-1.5 overflow-y-auto border-t border-border/50 px-3 py-2">
+            {item.sources.map((s, si) => (
+              <li
+                key={si}
+                className="flex gap-2 rounded-lg bg-muted/30 px-2 py-1.5"
+                title={`${s.detail}${s.country ? ` · ${s.country}` : ""}`}
+              >
+                <TrendingSourceGlyphLight type={s.type} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-foreground">
+                    {trendingSourceShortLabel(s.type)}
+                    {s.country ? (
+                      <span className="ml-1.5 font-normal text-muted-foreground">
+                        · <RegionInline label={s.country} />
+                      </span>
+                    ) : null}
+                  </p>
+                  <p className="line-clamp-2 text-[10px] leading-snug text-muted-foreground">
+                    {s.detail}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </details>
+
+        <div className="rounded-xl border border-border/60 bg-muted/25 p-3">
+          <div className="mb-2 flex items-center gap-2">
+            <RiSignalTowerLine className="size-3.5 text-primary" aria-hidden />
+            <span className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+              Signals &amp; factors
+            </span>
+          </div>
+          <div className="mb-3 h-2 overflow-hidden rounded-full bg-muted">
+            <div
+              className={cn(
+                "h-full rounded-full bg-linear-to-r transition-all",
+                buzzBarClass(item.trendScore)
+              )}
+              style={{ width: `${Math.min(100, item.trendScore)}%` }}
+            />
+          </div>
+          <ul className="space-y-2">
+            <li className="flex gap-2 text-[11px] leading-snug text-muted-foreground">
+              <RiLightbulbLine
+                className="mt-0.5 size-3.5 shrink-0 text-amber-500 dark:text-amber-400"
+                aria-hidden
+              />
+              <span>
+                <span className="font-medium text-foreground">
+                  Cross-channel:{" "}
+                </span>
+                {channelTypes.length === 0
+                  ? "See citations below for where buzz showed up."
+                  : `${distinctChannels} distinct source${
+                      distinctChannels === 1 ? "" : "s"
+                    } (${channelTypes
+                      .slice(0, 4)
+                      .map(trendingSourceShortLabel)
+                      .join(", ")}${channelTypes.length > 4 ? "…" : ""}).`}
+              </span>
+            </li>
+            {regionTags.length > 0 ? (
+              <li className="flex gap-2 text-[11px] leading-snug text-muted-foreground">
+                <RiGlobalLine
+                  className="mt-0.5 size-3.5 shrink-0 text-sky-500 dark:text-sky-400"
+                  aria-hidden
+                />
+                <span>
+                  <span className="font-medium text-foreground">Regions: </span>
+                  {regionTags.join(", ")}.
+                </span>
+              </li>
+            ) : null}
+            {factors.map((f, i) => (
+              <li
+                key={i}
+                className="flex gap-2 border-t border-border/40 pt-2 text-[11px] leading-relaxed text-muted-foreground first:border-t-0 first:pt-0"
+              >
+                <span
+                  className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary/70"
+                  aria-hidden
+                />
+                <span>{f}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+       
+      </div>
+    </article>
   )
 }
 
@@ -170,13 +542,37 @@ export function TrendingToysPanel() {
 
   const filteredRows = React.useMemo(() => {
     if (!data?.ok || !data.items?.length) return []
-    return data.items
+    const sortedRows = data.items
       .map((item, originalIndex) => ({ item, originalIndex }))
       .filter(
         ({ item }) =>
           itemMatchesCountryFilter(item, countryFilter) &&
           itemMatchesSearchQuery(item, searchQuery)
       )
+      .sort((a, b) => {
+        const ap = pinnedTrendPriority(a.item.name)
+        const bp = pinnedTrendPriority(b.item.name)
+        if (ap !== bp) return ap - bp
+        return a.originalIndex - b.originalIndex
+      })
+
+    const hasPinnedInResults = sortedRows.some(
+      ({ item }) => pinnedTrendPriority(item.name) !== Number.POSITIVE_INFINITY
+    )
+    if (hasPinnedInResults) return sortedRows
+
+    const fallbackRows = PINNED_GLOBAL_FALLBACK_ITEMS.map((item, i) => ({
+      item,
+      originalIndex: -(i + 1),
+    }))
+      .filter(
+        ({ item }) =>
+          itemMatchesCountryFilter(item, countryFilter) &&
+          itemMatchesSearchQuery(item, searchQuery)
+      )
+      .sort((a, b) => pinnedTrendPriority(a.item.name) - pinnedTrendPriority(b.item.name))
+
+    return [...fallbackRows, ...sortedRows]
   }, [data, countryFilter, searchQuery])
 
   const load = React.useCallback(async (forceRefresh = false) => {
@@ -248,7 +644,8 @@ export function TrendingToysPanel() {
           Global toy trends
         </h1>
         <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-          AI-ranked picks · photos when the catalog matches · list refreshes daily
+          AI-ranked picks · photos when the catalog matches · list refreshes
+          daily
         </p>
       </div>
 
@@ -292,10 +689,10 @@ export function TrendingToysPanel() {
 
         {!loading && data?.ok && data.items?.length ? (
           <div className="border-b border-border px-4 py-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center ">
               <div className="relative min-w-0 flex-1">
                 <RiSearchLine
-                  className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                  className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
                   aria-hidden
                 />
                 <Input
@@ -303,7 +700,7 @@ export function TrendingToysPanel() {
                   placeholder="Search toys, brands, sources…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-9 pl-9"
+                  className="h-9 pl-9 w-[300px]"
                   aria-label="Search trends"
                 />
               </div>
@@ -339,9 +736,9 @@ export function TrendingToysPanel() {
               {Array.from({ length: 6 }).map((_, i) => (
                 <div
                   key={i}
-                  className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+                  className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
                 >
-                  <div className="aspect-3/4 animate-pulse bg-muted/60" />
+                  <div className="aspect-5/4 animate-pulse bg-muted/60" />
                   <div className="space-y-2 p-3">
                     <div className="h-3 w-[75%] animate-pulse rounded bg-muted/70" />
                     <div className="h-2 w-full animate-pulse rounded bg-muted/50" />
@@ -359,11 +756,15 @@ export function TrendingToysPanel() {
               role="status"
             >
               <p className="font-medium">Trending list unavailable</p>
-              <p className="mt-1 text-[13px] leading-relaxed opacity-90">{error}</p>
+              <p className="mt-1 text-[13px] leading-relaxed opacity-90">
+                {error}
+              </p>
             </div>
           ) : data?.items?.length ? (
             <>
-              {(data.methodology || data.dataFreshnessNote || data.modelUsed) && (
+              {(data.methodology ||
+                data.dataFreshnessNote ||
+                data.modelUsed) && (
                 <details className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
                   <summary className="cursor-pointer list-none font-medium text-foreground marker:content-none [&::-webkit-details-marker]:hidden">
                     <span className="inline-flex items-center gap-2">
@@ -373,9 +774,13 @@ export function TrendingToysPanel() {
                   </summary>
                   <div className="mt-2 space-y-1 border-t border-border/60 pt-2">
                     {data.methodology ? <p>{data.methodology}</p> : null}
-                    {data.dataFreshnessNote ? <p>{data.dataFreshnessNote}</p> : null}
+                    {data.dataFreshnessNote ? (
+                      <p>{data.dataFreshnessNote}</p>
+                    ) : null}
                     {data.modelUsed ? (
-                      <p className="font-mono text-[10px] opacity-90">{data.modelUsed}</p>
+                      <p className="font-mono text-[10px] opacity-90">
+                        {data.modelUsed}
+                      </p>
                     ) : null}
                   </div>
                 </details>
@@ -385,153 +790,18 @@ export function TrendingToysPanel() {
                   No trends match your filters.
                 </p>
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {filteredRows.map(({ item, originalIndex }) => {
-                    const resolved = resolvedThumbnails[originalIndex]
-                    const imgUrl =
-                      typeof resolved === "string" && resolved.length > 0
-                        ? resolved
-                        : undefined
-                    const channelTypes = sortTrendingSourceTypes(
-                      item.sources.map((s) => s.type)
-                    )
-                    const regionTags = uniqueCountriesFromSources(item.sources)
-                    const shopUrl = googleShoppingUrl(item.name, item.brand)
-                    const photosUrl = googleImageSearchUrl(item.name, item.brand)
-                    return (
-                      <div
-                        key={`${item.name}-${originalIndex}`}
-                        className="group/card flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-shadow hover:shadow-md"
-                      >
-                        <div className="relative aspect-3/4 w-full overflow-hidden bg-muted">
-                          {imgUrl ? (
-                            <img
-                              src={imgUrl}
-                              alt=""
-                              className="size-full object-cover"
-                              loading="lazy"
-                            />
-                          ) : resolved === undefined ? (
-                            <div className="flex size-full animate-pulse items-center justify-center bg-muted/80">
-                              <span className="sr-only">Loading image</span>
-                            </div>
-                          ) : (
-                            <div className="flex size-full flex-col items-center justify-center gap-3 p-4 text-center">
-                              <RiGift2Line
-                                className="size-9 text-muted-foreground/35"
-                                aria-hidden
-                              />
-                              <div className="flex w-full max-w-[220px] flex-col gap-2">
-                                <a
-                                  href={shopUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted/50"
-                                >
-                                  <RiExternalLinkLine
-                                    className="size-3.5 shrink-0"
-                                    aria-hidden
-                                  />
-                                  Shop &amp; prices
-                                </a>
-                                <a
-                                  href={photosUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-transparent px-2 py-1 text-xs text-primary underline-offset-4 hover:underline"
-                                >
-                                  <RiExternalLinkLine
-                                    className="size-3.5 shrink-0"
-                                    aria-hidden
-                                  />
-                                  Image search
-                                </a>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/30 px-3 py-2 text-xs">
-                          <span className="font-semibold tabular-nums text-muted-foreground">
-                            #{originalIndex + 1}
-                          </span>
-                          <span className="font-semibold tabular-nums text-foreground">
-                            {item.trendScore}{" "}
-                            <span className="font-normal text-muted-foreground">
-                              buzz
-                            </span>
-                          </span>
-                          <span className="text-[10px] text-muted-foreground">
-                            {item.confidence}%
-                          </span>
-                        </div>
-
-                        <div className="flex min-h-0 flex-1 flex-col gap-2.5 p-3">
-                          {channelTypes.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {channelTypes.slice(0, 5).map((t) => (
-                                <span
-                                  key={t}
-                                  className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/30 px-2 py-0.5 text-[10px] font-medium text-foreground"
-                                  title={trendingSourceShortLabel(t)}
-                                >
-                                  <TrendingSourceBrandMark type={t} />
-                                  {trendingSourceShortLabel(t)}
-                                </span>
-                              ))}
-                            </div>
-                          ) : null}
-                          {regionTags.length > 0 ? (
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="text-[10px] text-muted-foreground">
-                                Region
-                              </span>
-                              {regionTags.map((c) => (
-                                <RegionChip key={c} label={c} />
-                              ))}
-                            </div>
-                          ) : null}
-                          <div>
-                            <p className="line-clamp-2 text-sm font-semibold leading-snug">
-                              {item.name}
-                            </p>
-                            {item.brand ? (
-                              <p className="mt-0.5 text-xs text-muted-foreground">
-                                {item.brand}
-                              </p>
-                            ) : null}
-                          </div>
-                          <p className="line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
-                            {item.whyTrending}
-                          </p>
-                          <div className="flex min-h-0 flex-col gap-1.5 border-t border-border pt-2">
-                            <div className="flex flex-wrap gap-1.5">
-                              {item.sources.map((s, si) => (
-                                <span
-                                  key={si}
-                                  title={`${s.detail}${s.country ? ` · ${s.country}` : ""}`}
-                                  className="inline-flex max-w-full flex-col gap-0.5 rounded-md border border-border bg-muted/25 px-2 py-1.5 text-[10px] sm:max-w-[calc(100%-0.25rem)]"
-                                >
-                                  <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
-                                    <TrendingSourceBrandMark type={s.type} />
-                                    {trendingSourceShortLabel(s.type)}
-                                  </span>
-                                  {s.country ? (
-                                    <span className="pl-6 text-[9px] text-muted-foreground">
-                                      <RegionInline label={s.country} />
-                                    </span>
-                                  ) : null}
-                                  <span className="pl-6 text-[9px] leading-snug text-muted-foreground">
-                                    {s.detail}
-                                  </span>
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  {filteredRows.map(({ item, originalIndex }, visibleIdx) => (
+                    <TrendingToyCard
+                      key={`${item.name}-${originalIndex}`}
+                      item={item}
+                      originalIndex={originalIndex}
+                      displayRank={visibleIdx + 1}
+                      resolvedThumb={
+                        originalIndex < 0 ? null : resolvedThumbnails[originalIndex]
+                      }
+                    />
+                  ))}
                 </div>
               )}
             </>
