@@ -135,13 +135,16 @@ function buildDemandSpotlight(variants: InventoryVariant[]): {
 
   const byTrend = [...variants].sort((a, b) => b.trendScore - a.trendScore)
   const mid = Math.max(1, Math.ceil(byTrend.length / 2))
-  const highPool = byTrend
-    .slice(0, mid)
-    .filter((v) => v.trendScore >= 48)
-  const highSource = highPool.length ? highPool : byTrend.slice(0, Math.min(4, byTrend.length))
+  const highPool = byTrend.slice(0, mid).filter((v) => v.trendScore >= 48)
+  const highSource = highPool.length
+    ? highPool
+    : byTrend.slice(0, Math.min(4, byTrend.length))
 
   const idlePool = variants.filter(
-    (v) => v.trendScore < 52 || v.weeksCover >= 4 || (v.onHand >= 40 && v.reserved <= 2)
+    (v) =>
+      v.trendScore < 52 ||
+      v.weeksCover >= 4 ||
+      (v.onHand >= 40 && v.reserved <= 2)
   )
   const idleSource =
     idlePool.length > 0 ? idlePool : byTrend.slice(-Math.min(4, byTrend.length))
@@ -173,7 +176,11 @@ type SpotlightProductRowProps = {
   onPick: (inv: InventoryVariant) => void
 }
 
-function SpotlightProductRow({ inv, metaLine, onPick }: SpotlightProductRowProps) {
+function SpotlightProductRow({
+  inv,
+  metaLine,
+  onPick,
+}: SpotlightProductRowProps) {
   const sig = variantMarketSignal(inv)
   return (
     <button
@@ -192,8 +199,12 @@ function SpotlightProductRow({ inv, metaLine, onPick }: SpotlightProductRowProps
         loading="lazy"
       />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[11px] font-medium leading-tight">{inv.productName}</p>
-        <p className="truncate font-mono text-[10px] text-muted-foreground">{inv.sku}</p>
+        <p className="truncate text-[11px] leading-tight font-medium">
+          {inv.productName}
+        </p>
+        <p className="truncate font-mono text-[10px] text-muted-foreground">
+          {inv.sku}
+        </p>
       </div>
       <div className="shrink-0 text-right text-[10px] leading-tight tabular-nums">
         <p className="font-semibold text-foreground">{metaLine}</p>
@@ -249,7 +260,9 @@ function TopMetricCard({
           {icon}
         </span>
       </div>
-      <p className="text-2xl font-semibold tracking-tight tabular-nums">{value}</p>
+      <p className="text-2xl font-semibold tracking-tight tabular-nums">
+        {value}
+      </p>
       {typeof barPct === "number" ? (
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted/70">
           <div
@@ -803,10 +816,12 @@ export function PredictionWorkspace() {
       {/* Title + next step */}
       <div className="grid items-start gap-3 lg:grid-cols-12">
         <div className="lg:col-span-8">
-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Trends</h1>
+          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
+            Trends
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Live or sample catalog: demand spotlight, search, market read, full SKU table,
-            planner, AI assist, and trend charts.
+            Live or sample catalog: demand spotlight, search, market read, full
+            SKU table, planner, AI assist, and trend charts.
           </p>
         </div>
         {/* <Panel className="flex flex-wrap items-center gap-3 border-primary/25 bg-primary/5 p-3 text-sm lg:col-span-4 lg:justify-self-end">
@@ -836,19 +851,25 @@ export function PredictionWorkspace() {
             <TopMetricCard
               title="Avg Trend"
               value={
-                avgTrend7d != null ? String(avgTrend7d) : String(overallMarket.avgTrend)
+                avgTrend7d != null
+                  ? String(avgTrend7d)
+                  : String(overallMarket.avgTrend)
               }
               helper="7-day portfolio demand strength"
               icon={<RiPulseLine className="size-4" aria-hidden />}
-              barPct={
-                avgTrend7d != null ? avgTrend7d : overallMarket.avgTrend
-              }
+              barPct={avgTrend7d != null ? avgTrend7d : overallMarket.avgTrend}
             />
             <TopMetricCard
               title="Momentum"
               value={`${overallMarket.momentumPct > 0 ? "+" : ""}${overallMarket.momentumPct}%`}
               helper="Week-over-week movement"
-              tone={overallMarket.momentumPct > 2 ? "good" : overallMarket.momentumPct < -2 ? "warn" : "default"}
+              tone={
+                overallMarket.momentumPct > 2
+                  ? "good"
+                  : overallMarket.momentumPct < -2
+                    ? "warn"
+                    : "default"
+              }
               icon={<RiArrowUpDownLine className="size-4" aria-hidden />}
               barPct={Math.min(100, Math.abs(overallMarket.momentumPct) * 5)}
             />
@@ -1090,25 +1111,33 @@ export function PredictionWorkspace() {
 
         <Panel className="flex h-full flex-col overflow-hidden p-0 lg:col-span-5 lg:h-[360px]">
           <div className="flex items-center gap-2 border-b border-border/50 bg-muted/25 px-4 py-2.5">
-            <RiBarChartGroupedLine className="size-5 shrink-0 text-primary" aria-hidden />
-            <h2 className="text-sm font-semibold tracking-tight">Demand spotlight</h2>
+            <RiBarChartGroupedLine
+              className="size-5 shrink-0 text-primary"
+              aria-hidden
+            />
+            <h2 className="text-sm font-semibold tracking-tight">
+              Demand spotlight
+            </h2>
           </div>
           {/* Spotlight search */}
           <div className="shrink-0 border-b border-border/40 px-3 py-2">
             <div className="relative">
-              <RiSearchLine className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <RiSearchLine
+                className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+                aria-hidden
+              />
               <input
                 type="search"
                 placeholder="Filter by name or SKU…"
                 value={spotlightSearch}
                 onChange={(e) => setSpotlightSearch(e.target.value)}
-                className="h-8 w-full rounded-lg border border-input bg-background pl-8 pr-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
+                className="h-8 w-full rounded-lg border border-input bg-background pr-3 pl-8 text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
               />
               {spotlightSearch && (
                 <button
                   type="button"
                   onClick={() => setSpotlightSearch("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   aria-label="Clear search"
                 >
                   <RiCloseLine className="size-3.5" aria-hidden />
@@ -1118,7 +1147,9 @@ export function PredictionWorkspace() {
           </div>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
             {variants.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No products loaded.</p>
+              <p className="text-sm text-muted-foreground">
+                No products loaded.
+              </p>
             ) : (
               <>
                 {/* High demand */}
@@ -1141,7 +1172,9 @@ export function PredictionWorkspace() {
                           ))
                         ) : (
                           <p className="text-xs text-muted-foreground">
-                            {spotlightSearch ? "No matches." : "No strong-demand SKUs in this slice."}
+                            {spotlightSearch
+                              ? "No matches."
+                              : "No strong-demand SKUs in this slice."}
                           </p>
                         )}
                       </div>
@@ -1168,7 +1201,9 @@ export function PredictionWorkspace() {
                           ))
                         ) : (
                           <p className="text-xs text-muted-foreground">
-                            {spotlightSearch ? "No matches." : "No idle SKUs matched filters."}
+                            {spotlightSearch
+                              ? "No matches."
+                              : "No idle SKUs matched filters."}
                           </p>
                         )}
                       </div>
@@ -1177,7 +1212,9 @@ export function PredictionWorkspace() {
                 })()}
                 {/* Returns */}
                 {(() => {
-                  const rows = filterSpotlight(demandSpotlight.returns.map((r) => r.inv))
+                  const rows = filterSpotlight(
+                    demandSpotlight.returns.map((r) => r.inv)
+                  )
                   return (
                     <div>
                       <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-rose-700 uppercase dark:text-rose-400">
@@ -1195,7 +1232,9 @@ export function PredictionWorkspace() {
                           ))
                         ) : (
                           <p className="text-xs text-muted-foreground">
-                            {spotlightSearch ? "No matches." : "No rows to rank."}
+                            {spotlightSearch
+                              ? "No matches."
+                              : "No rows to rank."}
                           </p>
                         )}
                       </div>
@@ -1221,7 +1260,7 @@ export function PredictionWorkspace() {
                 aria-hidden
               />
               <div>
-                <h2 className="text-sm font-semibold tracking-tight pt-1">
+                <h2 className="pt-1 text-sm font-semibold tracking-tight">
                   Search &amp; market
                 </h2>
                 {/* <p className="text-[11px] leading-snug text-muted-foreground">
@@ -1262,7 +1301,7 @@ export function PredictionWorkspace() {
                 <div className="flex items-center gap-2">
                   <div className="relative min-w-0 flex-1">
                     <RiSearchLine
-                      className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+                      className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
                       aria-hidden
                     />
                     <input
@@ -1270,17 +1309,22 @@ export function PredictionWorkspace() {
                       id="market-search"
                       type="search"
                       role="combobox"
-                      aria-expanded={marketSearchFocused && marketQuery.trim().length > 0}
+                      aria-expanded={
+                        marketSearchFocused && marketQuery.trim().length > 0
+                      }
                       aria-autocomplete="list"
                       aria-controls="market-search-suggestions"
                       placeholder="SKU, name, or keyword…"
                       autoComplete="off"
-                      className="h-8 w-full rounded-lg border border-input bg-background pl-8 pr-7 text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
+                      className="h-8 w-full rounded-lg border border-input bg-background pr-7 pl-8 text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
                       value={marketQuery}
                       onChange={(e) => setMarketQuery(e.target.value)}
                       onFocus={() => setMarketSearchFocused(true)}
                       onBlur={() => {
-                        window.setTimeout(() => setMarketSearchFocused(false), 200)
+                        window.setTimeout(
+                          () => setMarketSearchFocused(false),
+                          200
+                        )
                       }}
                       onKeyDown={(e) => {
                         if (e.key === "Escape") {
@@ -1315,7 +1359,7 @@ export function PredictionWorkspace() {
                       <button
                         type="button"
                         onClick={() => setMarketQuery("")}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                         aria-label="Clear search"
                       >
                         <RiCloseLine className="size-3.5" aria-hidden />
@@ -1539,36 +1583,36 @@ export function PredictionWorkspace() {
                   <>
                     <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-start">
                       <div>
-                      {marketResult.externalProduct ? (
-                      <div className=" flex items-center gap-3 rounded-lg border border-border/60 bg-background/70 p-2.5">
-                        {marketResult.externalProduct.thumbnailUrl ? (
-                          <img
-                            src={marketResult.externalProduct.thumbnailUrl}
-                            alt=""
-                            className="size-11 shrink-0 rounded-md bg-muted object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="size-11 shrink-0 rounded-md bg-muted" />
-                        )}
-                        <div className="min-w-0">
-                          <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
-                            Product search
-                          </p>
-                          <p className="truncate text-sm font-medium">
-                            {marketResult.externalProduct.title}
-                          </p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {[
-                              marketResult.externalProduct.brand,
-                              marketResult.externalProduct.category,
-                            ]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </p>
-                        </div>
-                      </div>
-                    ) : null}
+                        {marketResult.externalProduct ? (
+                          <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-background/70 p-2.5">
+                            {marketResult.externalProduct.thumbnailUrl ? (
+                              <img
+                                src={marketResult.externalProduct.thumbnailUrl}
+                                alt=""
+                                className="size-11 shrink-0 rounded-md bg-muted object-cover"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="size-11 shrink-0 rounded-md bg-muted" />
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                Product search
+                              </p>
+                              <p className="truncate text-sm font-medium">
+                                {marketResult.externalProduct.title}
+                              </p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {[
+                                  marketResult.externalProduct.brand,
+                                  marketResult.externalProduct.category,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </p>
+                            </div>
+                          </div>
+                        ) : null}
                         <p className="text-xs font-medium text-muted-foreground">
                           Market direction
                         </p>
@@ -1620,7 +1664,7 @@ export function PredictionWorkspace() {
                         {marketResult.summary}
                       </p>
                     </div>
-                    
+
                     <p className="mt-2 text-[11px] text-muted-foreground">
                       Source: {marketResult.source}
                     </p>
@@ -1712,7 +1756,7 @@ export function PredictionWorkspace() {
                     ) : trendPreviewRows?.length ? (
                       <Link
                         href="/prediction/trending-toys"
-                        className="group block rounded-xl border border-primary/20 bg-linear-to-br from-cyan-500/10 via-card to-violet-500/8 p-3 shadow-sm ring-1 ring-primary/10 transition hover:border-primary/35 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        className="group block rounded-xl border border-primary/20 bg-linear-to-br from-cyan-500/10 via-card to-violet-500/8 p-3 shadow-sm ring-1 ring-primary/10 transition hover:border-primary/35 hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex min-w-0 gap-2">
@@ -1721,16 +1765,20 @@ export function PredictionWorkspace() {
                             </span>
                             <div className="min-w-0">
                               <p className="text-xs font-semibold text-foreground">
-                                Global toy trends
+                                Global trends
                               </p>
                               <p className="text-[10px] leading-snug text-muted-foreground">
-                                AI picks (24h cache) · {trendPreviewRows.length} tracked · tap for sources &amp; regions
+                                AI picks (24h cache) · {trendPreviewRows.length}{" "}
+                                tracked · tap for sources &amp; regions
                               </p>
                             </div>
                           </div>
                           <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-semibold text-primary">
                             Open
-                            <RiArrowRightLine className="size-3.5 transition group-hover:translate-x-0.5" aria-hidden />
+                            <RiArrowRightLine
+                              className="size-3.5 transition group-hover:translate-x-0.5"
+                              aria-hidden
+                            />
                           </span>
                         </div>
                         <div className="mt-2.5 flex flex-wrap gap-1.5">
@@ -1739,7 +1787,9 @@ export function PredictionWorkspace() {
                               key={row.name}
                               className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-foreground"
                             >
-                              <span className="tabular-nums text-primary">{row.trendScore}</span>
+                              <span className="text-primary tabular-nums">
+                                {row.trendScore}
+                              </span>
                               {row.name}
                             </span>
                           ))}
@@ -1751,10 +1801,16 @@ export function PredictionWorkspace() {
                         className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-primary/25 bg-muted/20 px-3 py-3 text-left transition hover:border-primary/40 hover:bg-muted/30"
                       >
                         <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <RiGlobalLine className="size-4 shrink-0 text-primary" aria-hidden />
-                          Browse global toy trends (AI + sources by country)
+                          <RiGlobalLine
+                            className="size-4 shrink-0 text-primary"
+                            aria-hidden
+                          />
+                          Browse global trends (AI + sources by country)
                         </span>
-                        <RiArrowRightLine className="size-4 shrink-0 text-primary" aria-hidden />
+                        <RiArrowRightLine
+                          className="size-4 shrink-0 text-primary"
+                          aria-hidden
+                        />
                       </Link>
                     )}
                     <p className="text-center text-[10px] text-muted-foreground">
@@ -1904,9 +1960,14 @@ export function PredictionWorkspace() {
         <Panel className="flex min-h-[260px] flex-col overflow-hidden p-0 lg:col-span-8">
           <div className="flex items-center justify-between gap-2 border-b border-border/50 bg-muted/25 px-4 py-3">
             <div className="flex items-center gap-2">
-              <RiStackLine className="size-5 shrink-0 text-primary" aria-hidden />
+              <RiStackLine
+                className="size-5 shrink-0 text-primary"
+                aria-hidden
+              />
               <div>
-                <h2 className="text-sm font-semibold tracking-tight">All SKUs + planner</h2>
+                <h2 className="text-sm font-semibold tracking-tight">
+                  All SKUs + planner
+                </h2>
                 <p className="text-[11px] text-muted-foreground">
                   Click any SKU to update demand, AI, chart, and order settings.
                 </p>
@@ -1914,19 +1975,22 @@ export function PredictionWorkspace() {
             </div>
             {/* SKU search */}
             <div className="relative w-44 shrink-0">
-              <RiSearchLine className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <RiSearchLine
+                className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+                aria-hidden
+              />
               <input
                 type="search"
                 placeholder="Search SKUs…"
                 value={skuSearch}
                 onChange={(e) => setSkuSearch(e.target.value)}
-                className="h-8 w-full rounded-lg border border-input bg-background pl-8 pr-7 text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
+                className="h-8 w-full rounded-lg border border-input bg-background pr-7 pl-8 text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
               />
               {skuSearch && (
                 <button
                   type="button"
                   onClick={() => setSkuSearch("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   aria-label="Clear search"
                 >
                   <RiCloseLine className="size-3.5" aria-hidden />
@@ -1984,7 +2048,9 @@ export function PredictionWorkspace() {
             {variants.length === 0 ? (
               <p className="p-2 text-sm text-muted-foreground">No products.</p>
             ) : filteredVariants.length === 0 ? (
-              <p className="p-2 text-sm text-muted-foreground">No SKUs match "{skuSearch}".</p>
+              <p className="p-2 text-sm text-muted-foreground">
+                No SKUs match "{skuSearch}".
+              </p>
             ) : (
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
                 {filteredVariants.map((inv) => {
@@ -2040,7 +2106,9 @@ export function PredictionWorkspace() {
                           {sig.momentumPct > 0 ? "+" : ""}
                           {sig.momentumPct}%
                         </span>
-                        <span className="ml-2 text-muted-foreground">Confidence</span>
+                        <span className="ml-2 text-muted-foreground">
+                          Confidence
+                        </span>
                         <span className="ml-1 font-semibold tabular-nums">
                           {sig.confidence}%
                         </span>
@@ -2130,7 +2198,39 @@ export function PredictionWorkspace() {
                 {timing?.reason}
               </span>
             </div>
-            {demandNarratives ? (
+          </div>
+          {demandNarratives ? (
+            <div className="mt-4 space-y-2 rounded-lg border border-border/50 bg-background/70 p-3 text-sm backdrop-blur-sm">
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground">Season and calendar</span>
+              </div>
+              <div className="space-y-2 border-t border-border/40 pt-2">
+                {demandNarratives.seasonLines[0] ? (
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Calendar
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {demandNarratives.seasonLines[0]}
+                    </p>
+                  </div>
+                ) : null}
+                {demandNarratives.seasonLines.slice(1).length ? (
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Season
+                    </p>
+                    <ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+                      {demandNarratives.seasonLines.slice(1).map((line, i) => (
+                        <li key={`s-${i}`}>{line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          {/* {demandNarratives ? (
               <div className="border-t border-border/40 pt-2.5 space-y-3">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -2142,24 +2242,12 @@ export function PredictionWorkspace() {
                     ))}
                   </ul>
                 </div>
-                {/* <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    This SKU (your numbers)
-                  </p>
-                  <ul className="mt-1.5 list-disc space-y-1.5 pl-4 text-[11px] leading-snug text-muted-foreground">
-                    {demandNarratives.skuLines.map((line, i) => (
-                      <li key={`k-${i}`}>{line}</li>
-                    ))}
-                  </ul>
-                </div> */}
               </div>
-            ) : null}
-          </div>
+            ) : null} */}
         </Panel>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-12">
-
         <Panel className="space-y-3 p-4 lg:col-span-4">
           <h2 className="text-sm font-semibold">Order settings</h2>
           <p className="text-xs text-muted-foreground">

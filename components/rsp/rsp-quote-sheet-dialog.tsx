@@ -18,6 +18,7 @@ import { Dialog } from "radix-ui"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { deriveRspNumbers, type RspSharePayload } from "@/lib/rsp-share-types"
+import { RETAILER_AREA_LABELS, type RetailerArea } from "@/lib/retailer-order-templates"
 import { cn } from "@/lib/utils"
 
 export type RspQuoteLine = { label: string; cogs: number }
@@ -162,7 +163,7 @@ function buildMailBody(rows: ComputedRow[], manualRows: ManualRow[], retailer: s
 }
 
 // ─── Prop types ───────────────────────────────────────────────────────────────
-type Retailer = { id: string; name: string }
+type Retailer = { id: string; name: string; area?: RetailerArea }
 
 type Props = {
   open: boolean
@@ -334,7 +335,7 @@ export function RspQuoteSheetDialog({
                       <option value="">Select retailer…</option>
                       {retailers.map((r) => (
                         <option key={r.id} value={r.id}>
-                          {r.name}
+                          {r.name} · {RETAILER_AREA_LABELS[r.area ?? "uae"]}
                         </option>
                       ))}
                     </select>

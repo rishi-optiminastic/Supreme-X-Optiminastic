@@ -336,7 +336,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 hidden h-[57px] shrink-0 items-center justify-between gap-4 border-b border-border/40 bg-background/85 px-4  backdrop-blur-md dark:bg-background/80 md:flex lg:px-6">
+        <header className="sticky top-0 z-30 hidden h-[54px] shrink-0 items-center justify-between gap-4 border-b border-border/40 bg-background/85 px-4  backdrop-blur-md dark:bg-background/80 md:flex lg:px-6">
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold tracking-tight text-foreground">
               {section.title}

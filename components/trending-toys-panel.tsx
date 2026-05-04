@@ -14,7 +14,6 @@ import {
   RiSignalTowerLine,
 } from "@remixicon/react"
 
-import { Panel } from "@/components/panel"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { TrendingSourceBrandMark } from "@/components/trending-toys-brand-icons"
@@ -295,7 +294,7 @@ function TrendingToyCard({
               No catalog photo yet. Open shopping or image search to find one.
             </p>
             <div className="flex gap-2 w-full justify-center">
-            <Button size={"xs"}>
+            {/* <Button size={"xs"}>
             <a
                 href={shopUrl}
                 target="_blank"
@@ -307,7 +306,7 @@ function TrendingToyCard({
                 <RiExternalLinkLine className="size-3.5 shrink-0" aria-hidden />
                 Shop &amp; prices
               </a>
-            </Button>
+            </Button> */}
             <Button size={"xs"}>
             <a
                 href={photosUrl}
@@ -641,7 +640,7 @@ export function TrendingToysPanel() {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
-          Global toy trends
+          Global trends
         </h1>
         <p className="mt-1 max-w-xl text-sm text-muted-foreground">
           AI-ranked picks · photos when the catalog matches · list refreshes
@@ -649,46 +648,44 @@ export function TrendingToysPanel() {
         </p>
       </div>
 
-      <Panel className="border border-border bg-card p-0 shadow-sm">
-        <div className="border-b border-border px-4 py-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <RiGlobalLine className="size-4 shrink-0" aria-hidden />
-              {data?.ok && data.cachedAt ? (
-                <span className="text-xs">
-                  Updated{" "}
-                  <time dateTime={data.cachedAt}>
-                    {new Date(data.cachedAt).toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                    })}
-                  </time>
-                  {data.servedFrom === "daily_cache" ? " · cached 24h" : null}
-                </span>
-              ) : (
-                <span className="text-xs">Trending toys</span>
-              )}
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0 gap-1.5"
-              disabled={loading}
-              onClick={() => void load(true)}
-              title="Refresh list"
-            >
-              <RiRefreshLine
-                className={cn("size-4", loading && "animate-spin")}
-                aria-hidden
-              />
-              {loading ? "…" : "Refresh"}
-            </Button>
+      <div className="min-w-0 space-y-4">
+        <div className="flex flex-col gap-3 border-b border-border/60 pb-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <RiGlobalLine className="size-4 shrink-0" aria-hidden />
+            {data?.ok && data.cachedAt ? (
+              <span className="text-xs">
+                Updated{" "}
+                <time dateTime={data.cachedAt}>
+                  {new Date(data.cachedAt).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </time>
+                {data.servedFrom === "daily_cache" ? " · cached 24h" : null}
+              </span>
+            ) : (
+              <span className="text-xs">Trending toys</span>
+            )}
           </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0 gap-1.5"
+            disabled={loading}
+            onClick={() => void load(true)}
+            title="Refresh list"
+          >
+            <RiRefreshLine
+              className={cn("size-4", loading && "animate-spin")}
+              aria-hidden
+            />
+            {loading ? "…" : "Refresh"}
+          </Button>
         </div>
 
         {!loading && data?.ok && data.items?.length ? (
-          <div className="border-b border-border px-4 py-3">
+          <div className="border-b border-border/60 py-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center ">
               <div className="relative min-w-0 flex-1">
                 <RiSearchLine
@@ -730,7 +727,7 @@ export function TrendingToysPanel() {
           </div>
         ) : null}
 
-        <div className="relative space-y-4 p-4">
+        <div className="relative space-y-4 pt-1">
           {loading ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 6 }).map((_, i) => (
@@ -809,7 +806,7 @@ export function TrendingToysPanel() {
             <p className="text-sm text-muted-foreground">No items returned.</p>
           )}
         </div>
-      </Panel>
+      </div>
     </div>
   )
 }

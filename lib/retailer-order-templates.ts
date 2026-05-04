@@ -1,5 +1,18 @@
 const KEY = "supreme-odoo-retailer-order-templates-v1"
 
+/** Trading / pricing region for the retailer (matches RSP channel columns). */
+export type RetailerArea = "uae" | "region" | "saudi"
+
+export const RETAILER_AREA_LABELS: Record<RetailerArea, string> = {
+  uae: "UAE",
+  region: "Region",
+  saudi: "Saudi",
+}
+
+export function normalizeRetailerArea(v: unknown): RetailerArea {
+  return v === "region" || v === "saudi" || v === "uae" ? v : "uae"
+}
+
 export type StoredTemplateFile = {
   fileName: string
   mimeType: string
@@ -11,6 +24,8 @@ export type StoredTemplateFile = {
 export type RetailerOrderProfile = {
   id: string
   name: string
+  /** Where they trade; defaults to UAE when missing (older saved profiles). */
+  area?: RetailerArea
   createdAtIso: string
   template: StoredTemplateFile | null
   /** When true and template is null, filled exports use the built-in master workbook in /public. */

@@ -27,7 +27,11 @@ import {
   deriveRspNumbers,
   recomputePayload,
 } from "@/lib/rsp-share-types"
-import { loadRetailerTemplatesState } from "@/lib/retailer-order-templates"
+import {
+  loadRetailerTemplatesState,
+  normalizeRetailerArea,
+  type RetailerArea,
+} from "@/lib/retailer-order-templates"
 import { cn } from "@/lib/utils"
 
 function toMoney(n: number) {
@@ -63,11 +67,17 @@ export function RspDashboard({
   const [internalQuoteOpen, setInternalQuoteOpen] = React.useState(false)
 
   // Load retailers from shared localStorage store
-  const [retailers, setRetailers] = React.useState<{ id: string; name: string }[]>([])
+  const [retailers, setRetailers] = React.useState<{ id: string; name: string; area: RetailerArea }[]>([])
   React.useLayoutEffect(() => {
     try {
       const s = loadRetailerTemplatesState()
-      setRetailers((s.retailers ?? []).map((r) => ({ id: r.id, name: r.name })))
+      setRetailers(
+        (s.retailers ?? []).map((r) => ({
+          id: r.id,
+          name: r.name,
+          area: normalizeRetailerArea(r.area),
+        }))
+      )
     } catch {
       /* storage unavailable */
     }
@@ -421,7 +431,13 @@ export function RspDashboard({
         </Panel>
       </div>
 
-      <RspQuoteSheetDialog open={quoteOpen} onOpenChange={setQuoteOpen} payload={payload} lines={quoteLines} retailers={retailers} />
+      <RspQuoteSheetDialog
+        open={quoteOpen}
+        onOpenChange={setQuoteOpen}
+        payload={payload}
+        lines={quoteLines}
+        retailers={retailers}
+      />
     </div>
   )
 }

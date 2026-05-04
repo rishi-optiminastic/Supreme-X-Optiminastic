@@ -6,10 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import {
   RiExternalLinkLine,
   RiFileList3Line,
-  RiFundsLine,
-  RiGlobalLine,
   RiHistoryLine,
-  RiMapPinLine,
   RiPriceTag3Line,
   RiShareLine,
   RiStackLine,
@@ -21,25 +18,18 @@ import { RspBulkTable, type RspBulkRow } from "@/components/rsp/rsp-bulk-table"
 import { RspComposer } from "@/components/rsp/rsp-composer"
 import { RspDashboard } from "@/components/rsp/rsp-dashboard"
 import { RspHistorySidebar, type RspHistoryItem } from "@/components/rsp/rsp-history-sidebar"
-import { RspMetricCard } from "@/components/rsp/rsp-metric-card"
 import { parseExcelCogs } from "@/lib/parse-excel-cogs"
 import {
   defaultRspPayload,
-  deriveRspNumbers,
   normalizeRspPayload,
   recomputePayload,
   type RspSharePayload,
 } from "@/lib/rsp-share-types"
-import { cn } from "@/lib/utils"
 
 function newRowId() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : `r-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-}
-
-function toMoney(n: number) {
-  return `AED ${Math.round(n).toLocaleString("en-AE")}`
 }
 
 type View = "idle" | "single" | "bulk"
@@ -500,10 +490,6 @@ function PricingWorkspaceClient() {
   }
 
   // ─── Single / Calculator ──────────────────────────────────────────────────
-  // Derive RSP numbers here so sidebar metric cards stay in sync with RspDashboard
-  const d = deriveRspNumbers(payload)
-  const maxRsp = Math.max(d.uaeRsp, d.regionRsp, d.SaudiRsp) || 1
-
   return (
     <div className="max-w-7xl space-y-3 px-4 py-8 sm:py-10">
       {/* Page header */}
@@ -593,101 +579,16 @@ function PricingWorkspaceClient() {
         <p className="text-xs text-rose-600 dark:text-rose-400">{linkError}</p>
       )}
 
-      {/* Bento grid — left 8: full breakdown · right 4: metric cards + session */}
-      <div className="grid gap-3 lg:grid-cols-6">
-        {/* Main price breakdown panel */}
-        <Panel className="overflow-hidden p-0 lg:col-span-8">
-          {/* <div className="flex items-center gap-2.5 border-b border-border/50 px-4 py-3">
-            <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted">
-              <RiPriceTag3Line className="size-4 text-muted-foreground" aria-hidden />
-            </div>
-            <div>
-              <h2 className="text-sm font-semibold">Price breakdown</h2>
-              <p className="text-[11px] text-muted-foreground">
-                Adjust costs, margins, and see real-time shelf prices
-              </p>
-            </div>
-          </div> */}
-          <div className="p-4">
-            <RspDashboard
-              payload={payload}
-              onChange={applyPayload}
-              quoteOpen={quoteOpen}
-              onQuoteOpenChange={setQuoteOpen}
-            />
-          </div>
-        </Panel>
-
-        {/* <div className="space-y-3 lg:col-span-4">
-          <RspMetricCard
-            title="UAE RSP"
-            value={toMoney(d.uaeRsp)}
-            helper={`${payload.uaeVatPct}% VAT on shelf · pre-VAT ${toMoney(d.uaeBase)}`}
-            tone="default"
-            barPct={(d.uaeRsp / maxRsp) * 100}
-            icon={<RiGlobalLine className="size-3.5" aria-hidden />}
+      <Panel className="overflow-hidden p-0">
+        <div className="p-4">
+          <RspDashboard
+            payload={payload}
+            onChange={applyPayload}
+            quoteOpen={quoteOpen}
+            onQuoteOpenChange={setQuoteOpen}
           />
-
-          <RspMetricCard
-            title="Region RSP"
-            value={toMoney(d.regionRsp)}
-            helper={`${payload.regionFreightPct}% freight · landed ${toMoney(d.regionLanded)}`}
-            tone="good"
-            barPct={(d.regionRsp / maxRsp) * 100}
-            icon={<RiMapPinLine className="size-3.5" aria-hidden />}
-          />
-
-          <RspMetricCard
-            title="Saudi RSP"
-            value={toMoney(d.SaudiRsp)}
-            helper={`${payload.SaudiFreightPct}% freight + ${payload.SaudiVatPct}% VAT`}
-            tone="warn"
-            barPct={(d.SaudiRsp / maxRsp) * 100}
-            icon={<RiFundsLine className="size-3.5" aria-hidden />}
-          />
-
-          {shareUrl && (
-            <Panel className="overflow-hidden border-border/60 p-0">
-              <div className="flex items-center gap-2.5 border-b border-border/50 px-3 py-2.5">
-                <RiShareLine className="size-4 shrink-0 text-primary" aria-hidden />
-                <p className="text-xs font-semibold">Share link ready</p>
-              </div>
-              <div className="space-y-2 p-3">
-                <a
-                  href={shareUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block truncate text-xs font-medium text-primary hover:underline"
-                >
-                  {shareUrl}
-                </a>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full gap-1.5"
-                  onClick={() => void copyLink()}
-                >
-                  {copied ? "Copied!" : "Copy link"}
-                </Button>
-              </div>
-            </Panel>
-          )}
-
-          <Panel className="border-primary/20 bg-primary/5 px-4 py-3.5">
-            <p className="text-sm">
-              <RiPriceTag3Line
-                className="mr-1.5 inline size-4 align-text-bottom text-primary"
-                aria-hidden
-              />
-              Ready to purchase?{" "}
-              <Link href="/purchase" className="font-medium text-primary hover:underline">
-                Create order →
-              </Link>
-            </p>
-          </Panel>
-        </div> */}
-      </div>
+        </div>
+      </Panel>
     </div>
   )
 }
